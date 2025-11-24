@@ -12,28 +12,15 @@ export default function Home() {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [prompt, setPrompt] = useState("");
-  const [model, setModel] = useState<GenerationModel>("nano-banana-fast");
+  const [model, setModel] = useState<GenerationModel>("nano-banana-pro");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("auto");
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
   const [isGenerating, setIsGenerating] = useState(false);
-
-  // Fetch history on load
-  useEffect(() => {
-    // const key = localStorage.getItem("image_ai_access_key");
-    // fetch("/api/history", {
-    //   headers: { "x-access-key": key || "" }
-    // })
-    //   .then((res) => res.json())
-    //   .then((data) => {
-    //     if (Array.isArray(data)) {
-    //       setGeneratedImages(data);
-    //     }
-    //   })
-    //   .catch((err) => console.error("Failed to fetch history:", err));
-  }, []);
+  const [generationProgress, setGenerationProgress] = useState<number>(0);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setGenerationProgress(0);
     
     try {
       const key = localStorage.getItem("image_ai_access_key") || "";
@@ -50,6 +37,7 @@ export default function Home() {
 
       const imageUrls = await Promise.all(imagePromises);
 
+      // Step 1: Initiate generation
       const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
@@ -69,13 +57,89 @@ export default function Home() {
         throw new Error("Generation failed");
       }
 
-      const data = await response.json();
-      setGeneratedImages([data, ...generatedImages]);
+      const { taskId } = await response.json();
+      console.log("Task ID:", taskId);
+
+      // Create placeholder image immediately
+      const placeholderImage: GeneratedImage = {
+        id: taskId,
+        prompt,
+        model,
+        createdAt: Date.now(),
+        progress: 0,
+        // url is undefined (will be set when complete)
+      };
+      
+      setGeneratedImages([placeholderImage, ...generatedImages]);
+
+      // Step 2: Poll for status
+      const pollInterval = 2000; // 2 seconds
+      const maxAttempts = 300; // 10 minutes max (300 * 2s = 600s = 10min)
+      let attempts = 0;
+
+      const poll = async (): Promise<void> => {
+        if (attempts >= maxAttempts) {
+          throw new Error("Generation timed out");
+        }
+
+        attempts++;
+
+        const statusResponse = await fetch("/api/generate/status", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-key": key,
+          },
+          body: JSON.stringify({ taskId }),
+        });
+
+        if (!statusResponse.ok) {
+          throw new Error("Failed to check status");
+        }
+
+        const statusData = await statusResponse.json();
+        console.log("Status:", statusData);
+
+        // Update progress in the placeholder
+        if (statusData.progress !== undefined) {
+          setGenerationProgress(statusData.progress);
+          setGeneratedImages((prev) =>
+            prev.map((img) =>
+              img.id === taskId ? { ...img, progress: statusData.progress } : img
+            )
+          );
+        }
+
+        // Check status
+        if (statusData.status === "succeeded" && statusData.results && statusData.results.length > 0) {
+          // Generation complete - update placeholder with final image
+          const imageUrl = statusData.results[0].url;
+          setGeneratedImages((prev) =>
+            prev.map((img) =>
+              img.id === taskId
+                ? { ...img, url: imageUrl, progress: 100 }
+                : img
+            )
+          );
+          setGenerationProgress(100);
+        } else if (statusData.status === "failed") {
+          // Remove placeholder on failure
+          setGeneratedImages((prev) => prev.filter((img) => img.id !== taskId));
+          throw new Error(statusData.failure_reason || statusData.error || "Generation failed");
+        } else {
+          // Still running, poll again
+          await new Promise((resolve) => setTimeout(resolve, pollInterval));
+          await poll();
+        }
+      };
+
+      await poll();
     } catch (error) {
       console.error("Error generating image:", error);
-      // You might want to add a toast notification here
+      alert(`Generation error: ${error instanceof Error ? error.message : "Unknown error"}`);
     } finally {
       setIsGenerating(false);
+      setGenerationProgress(0);
     }
   };
 
@@ -112,6 +176,7 @@ export default function Home() {
               onImageSizeChange={setImageSize}
               onSubmit={handleGenerate}
               isGenerating={isGenerating}
+              progress={generationProgress}
             />
           </section>
         </div>

@@ -16,6 +16,7 @@ interface GenerationFormProps {
   onImageSizeChange: (size: ImageSize) => void;
   onSubmit: () => void;
   isGenerating: boolean;
+  progress?: number;
 }
 
 export function GenerationForm({
@@ -29,6 +30,7 @@ export function GenerationForm({
   onImageSizeChange,
   onSubmit,
   isGenerating,
+  progress = 0,
 }: GenerationFormProps) {
   return (
     <div className="space-y-6">

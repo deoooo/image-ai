@@ -4,10 +4,11 @@ export type ImageSize = "1K" | "2K" | "4K";
 
 export interface GeneratedImage {
   id: string;
-  url: string;
+  url?: string; // Optional during generation
   prompt: string;
   model: GenerationModel;
   createdAt: number;
+  progress?: number; // Progress percentage during generation
 }
 
 export interface UploadedImage {

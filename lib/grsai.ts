@@ -33,7 +33,7 @@ export class GrsaiClient {
     this.baseUrl = process.env.GRSAI_API_BASE_URL || "https://api.grsai.com";
   }
 
-  async draw(params: GrsaiDrawRequest): Promise<string[]> {
+  async draw(params: GrsaiDrawRequest): Promise<string> {
     console.log("Requesting Grsai API with params:", JSON.stringify(params, null, 2));
     
     const response = await fetch(`${this.baseUrl}/v1/draw/nano-banana`, {
@@ -43,12 +43,13 @@ export class GrsaiClient {
         Authorization: `Bearer ${this.apiKey}`,
       },
       body: JSON.stringify({
-        model: params.model || "nano-banana-fast",
+        model: params.model || "nano-banana-pro",
         prompt: params.prompt,
         aspectRatio: params.aspectRatio || "auto",
         imageSize: params.imageSize || "1K",
         urls: params.urls || [],
-        shutProgress: params.shutProgress ?? false, // Use param or default to false
+        webHook: "-1", // Fixed value for polling mode
+        shutProgress: false, // Disable progress in webhook
       }),
     });
 
@@ -61,91 +62,70 @@ export class GrsaiClient {
       throw new Error(`API request failed: ${response.status} ${errorText}`);
     }
 
-    const contentType = response.headers.get("content-type");
+    const data = await response.json();
+    console.log("Grsai API Response Data:", data);
 
-    // Handle Image Response (Stream)
-    if (contentType && contentType.startsWith("image/")) {
-      console.log("Received image stream, uploading to R2...");
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
-      const filename = `generated/${Date.now()}.png`; // Assume PNG or extract from content-type
-      
-      // Upload to R2
-      const r2Url = await uploadToR2(filename, buffer, contentType);
-      console.log("Uploaded to R2:", r2Url);
-      return [r2Url];
+    // Extract task ID from response
+    if (data.id) {
+      return data.id;
+    } else if (data.data && data.data.id) {
+      return data.data.id;
+    } else {
+      throw new Error(`No task ID in response: ${JSON.stringify(data)}`);
     }
-
-    // Handle JSON Response (Server-Sent Events format)
-    if (!response.body) {
-      throw new Error("No response body");
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let finalResult: GrsaiDrawResponse | null = null;
-    let taskId = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-      
-      // SSE format: each event is "data: {json}\n\n"
-      const lines = buffer.split("\n");
-      
-      // Keep incomplete line in buffer
-      if (!buffer.endsWith("\n")) {
-        buffer = lines.pop() || "";
-      } else {
-        buffer = "";
-      }
-
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine || !trimmedLine.startsWith("data:")) continue;
-        
-        try {
-          // Remove "data: " prefix
-          const jsonStr = trimmedLine.substring(5).trim();
-          if (!jsonStr) continue;
-          
-          const data = JSON.parse(jsonStr);
-          console.log("Parsed SSE data:", data);
-          
-          if (!taskId && data.id) {
-            taskId = data.id;
-          }
-          
-          // Check for different success formats
-          if (data.status === "succeeded") {
-            finalResult = data;
-            break; // Found final result
-          } else if (data.status === "failed") {
-            throw new Error(data.failure_reason || data.error || "Generation failed");
-          }
-          // Otherwise it's still running, continue polling
-        } catch (e) {
-          console.warn("Failed to parse SSE line:", trimmedLine, e);
-        }
-      }
-      
-      // If we found the final result, break out of the read loop
-      if (finalResult) break;
-    }
-
-    if (!finalResult || !finalResult.results || finalResult.results.length === 0) {
-      throw new Error(`Did not receive successful result. Task ID: ${taskId || "unknown"}`);
-    }
-
-    return finalResult.results.map((r: any) => r.url);
   }
 
-  // Legacy method kept for compatibility
-  async pollResult(taskId: string): Promise<string[]> {
-    return []; 
+  async getResult(taskId: string): Promise<GrsaiDrawResponse> {
+    console.log("Fetching result for task:", taskId);
+    
+    const response = await fetch(`${this.baseUrl}/v1/draw/result`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({
+        id: taskId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Failed to get result: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log("Result API Response:", result);
+
+    // Handle different response formats
+    if (result.data) {
+      return result.data;
+    } else if (result.id) {
+      return result;
+    } else {
+      throw new Error(`Unexpected result format: ${JSON.stringify(result)}`);
+    }
+  }
+
+  // Polling method for server-side use
+  async pollResult(taskId: string, intervalMs = 2000, timeoutMs = 120000): Promise<string[]> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < timeoutMs) {
+      const result = await this.getResult(taskId);
+
+      if (result.status === "succeeded" && result.results && result.results.length > 0) {
+        return result.results.map((r: any) => r.url);
+      }
+
+      if (result.status === "failed") {
+        throw new Error(result.failure_reason || result.error || "Generation failed");
+      }
+
+      // Still running, wait before next poll
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error("Polling timed out");
   }
 }

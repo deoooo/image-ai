@@ -44,57 +44,23 @@ export async function POST(req: Request) {
       inputImageUrls = results.filter((url): url is string => !!url);
     }
 
-    // 2. Call Grsai API (Streaming/Blocking)
-    // The new draw method waits for the stream to finish and returns URLs
-    const resultUrls = await client.draw({
-      model: (model as any) || "nano-banana-fast", // Cast to match literal types
+    // 2. Call Grsai API to initiate generation (returns task ID immediately)
+    const taskId = await client.draw({
+      model: (model as any) || "nano-banana-pro",
       prompt,
       aspectRatio: aspectRatio || "auto",
       imageSize: imageSize || "1K",
       urls: inputImageUrls,
     });
 
-    const imageUrl = resultUrls[0];
-    let finalImageUrl = imageUrl;
+    console.log("Generation task created:", taskId);
 
-    // Note: If GrsaiClient already uploaded to R2 (image stream), finalImageUrl is already an R2 URL.
-    // If it returned a URL from Grsai (JSON response), we might still want to upload it to R2 if it's not already there.
-    
-    // Check if it's already an R2 URL (simple check)
-    const isR2Url = imageUrl.includes("r2.cloudflarestorage.com") || (process.env.R2_PUBLIC_URL && imageUrl.includes(process.env.R2_PUBLIC_URL));
-
-    if (!isR2Url) {
-       try {
-        const imageRes = await fetch(imageUrl);
-        const imageBuffer = await imageRes.arrayBuffer();
-        const id = Date.now().toString();
-        const r2Url = await uploadToR2(
-          `generated/${id}.png`,
-          Buffer.from(imageBuffer),
-          "image/png"
-        );
-        finalImageUrl = r2Url;
-      } catch (uploadError) {
-        console.error("Failed to upload to R2, using original URL:", uploadError);
-      }
-    }
-
-    // Save to Database
-    // Note: We are re-enabling DB save now that we have R2 storage
-    // const generation = await prisma.generation.create({
-    //   data: {
-    //     prompt,
-    //     model: model || "nano-banana-pro",
-    //     imageUrl: finalImageUrl,
-    //   },
-    // });
-
+    // Return task ID immediately for frontend polling
     return NextResponse.json({
-      id: Date.now().toString(), // generation.id,
-      url: finalImageUrl, // generation.imageUrl,
-      prompt, // generation.prompt,
-      model, // generation.model,
-      createdAt: Date.now(), // generation.createdAt.getTime(),
+      taskId,
+      status: "pending",
+      prompt,
+      model,
     });
 
   } catch (error: any) {

@@ -1,0 +1,17 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Generation {
+  id        String   @id @default(cuid())
+  prompt    String
+  model     String
+  imageUrl  String
+  createdAt DateTime @default(now())
+  
+  @@index([createdAt])
+}

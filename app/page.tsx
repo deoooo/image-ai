@@ -1,65 +1,134 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect } from "react";
+import { ImageUploader } from "@/components/ImageUploader";
+import { GenerationForm } from "@/components/GenerationForm";
+import { ImageGallery } from "@/components/ImageGallery";
+import { GeneratedImage, GenerationModel, UploadedImage, AspectRatio, ImageSize } from "@/types";
+import { Sparkles } from "lucide-react";
+import { upload } from "@vercel/blob/client";
 
 export default function Home() {
+  const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
+  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [prompt, setPrompt] = useState("");
+  const [model, setModel] = useState<GenerationModel>("nano-banana-fast");
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>("auto");
+  const [imageSize, setImageSize] = useState<ImageSize>("1K");
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Fetch history on load
+  useEffect(() => {
+    // const key = localStorage.getItem("image_ai_access_key");
+    // fetch("/api/history", {
+    //   headers: { "x-access-key": key || "" }
+    // })
+    //   .then((res) => res.json())
+    //   .then((data) => {
+    //     if (Array.isArray(data)) {
+    //       setGeneratedImages(data);
+    //     }
+    //   })
+    //   .catch((err) => console.error("Failed to fetch history:", err));
+  }, []);
+
+  const handleGenerate = async () => {
+    setIsGenerating(true);
+    
+    try {
+      const key = localStorage.getItem("image_ai_access_key") || "";
+
+      // Convert images to Base64 directly
+      const imagePromises = uploadedImages.map(async (img) => {
+        return new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(img.file);
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = error => reject(error);
+        });
+      });
+
+      const imageUrls = await Promise.all(imagePromises);
+
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-access-key": key,
+        },
+        body: JSON.stringify({
+          prompt,
+          model,
+          aspectRatio,
+          imageSize,
+          images: imageUrls,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Generation failed");
+      }
+
+      const data = await response.json();
+      setGeneratedImages([data, ...generatedImages]);
+    } catch (error) {
+      console.error("Error generating image:", error);
+      // You might want to add a toast notification here
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <main className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+      <header className="flex items-center gap-3 pb-6 border-b border-gray-200">
+        <div className="p-2 bg-black rounded-lg">
+          <Sparkles className="w-6 h-6 text-white" />
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+        <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Left Sidebar - Controls */}
+        <div className="lg:col-span-4 space-y-8">
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold mb-4">Input Images</h2>
+            <ImageUploader
+              images={uploadedImages}
+              onImagesChange={setUploadedImages}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </section>
+
+          <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold mb-4">Generation Settings</h2>
+            <GenerationForm
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              model={model}
+              onModelChange={setModel}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={setAspectRatio}
+              imageSize={imageSize}
+              onImageSizeChange={setImageSize}
+              onSubmit={handleGenerate}
+              isGenerating={isGenerating}
+            />
+          </section>
         </div>
-      </main>
-    </div>
+
+        {/* Right Content - Gallery */}
+        <div className="lg:col-span-8">
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Gallery</h2>
+              <span className="text-sm text-gray-500">
+                {generatedImages.length} generated
+              </span>
+            </div>
+            <ImageGallery images={generatedImages} />
+          </section>
+        </div>
+      </div>
+    </main>
   );
 }

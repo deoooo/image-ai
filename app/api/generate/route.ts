@@ -26,20 +26,22 @@ export async function POST(req: Request) {
     // 1. Upload input images to R2 if present (to get public URLs for Grsai)
     let inputImageUrls: string[] = [];
     if (images && images.length > 0) {
-      const uploadPromises = images.map(async (base64Img: string, index: number) => {
-        // Base64 format: "data:image/png;base64,..."
-        const matches = base64Img.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-        if (!matches || matches.length !== 3) {
-          return null;
+      const uploadPromises = images.map(
+        async (base64Img: string, index: number) => {
+          // Base64 format: "data:image/png;base64,..."
+          const matches = base64Img.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (!matches || matches.length !== 3) {
+            return null;
+          }
+
+          const contentType = matches[1];
+          const buffer = Buffer.from(matches[2], "base64");
+          const filename = `inputs/${Date.now()}-${index}.png`; // Simple unique name
+
+          return await uploadToR2(filename, buffer, contentType);
         }
-        
-        const contentType = matches[1];
-        const buffer = Buffer.from(matches[2], "base64");
-        const filename = `inputs/${Date.now()}-${index}.png`; // Simple unique name
-        
-        return await uploadToR2(filename, buffer, contentType);
-      });
-      
+      );
+
       const results = await Promise.all(uploadPromises);
       inputImageUrls = results.filter((url): url is string => !!url);
     }
@@ -55,6 +57,20 @@ export async function POST(req: Request) {
 
     console.log("Generation task created:", taskId);
 
+    // Save to Supabase (non-blocking)
+    import("@/lib/supabase")
+      .then(async ({ supabaseAdmin }) => {
+        if (supabaseAdmin) {
+          await supabaseAdmin.from("generations").insert({
+            task_id: taskId,
+            prompt,
+            model,
+            status: "pending",
+          });
+        }
+      })
+      .catch((err) => console.error("Failed to save to Supabase:", err));
+
     // Return task ID immediately for frontend polling
     return NextResponse.json({
       taskId,
@@ -62,7 +78,6 @@ export async function POST(req: Request) {
       prompt,
       model,
     });
-
   } catch (error: any) {
     console.error("Generation error:", error);
     return NextResponse.json(

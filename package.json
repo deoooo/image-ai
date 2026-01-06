@@ -13,6 +13,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.937.0",
     "@prisma/client": "^7.0.0",
+    "@supabase/supabase-js": "^2.89.0",
     "@vercel/blob": "^2.0.0",
     "@vercel/postgres": "^0.10.0",
     "clsx": "^2.1.1",

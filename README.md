@@ -21,35 +21,31 @@
 
 - **前端框架**: [Next.js 16](https://nextjs.org/) (App Router)
 - **UI 库**: React 19, [Tailwind CSS v4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
-- **数据库**: PostgreSQL (via [Prisma](https://www.prisma.io/))
-- **对象存储**: Vercel Blob / AWS S3 Compatible (Cloudflare R2)
+- **数据库**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **对象存储**: Cloudflare R2
 - **AI 服务**: 支持多种 AI 图像生成服务 (如 Grsai API 等)
 
-## 🚀 快速开始
+## 🚀 本地运行指南
 
 ### 1. 环境准备
 
-确保你的本地环境已安装：
+- **Node.js**: 推荐 v20 或更高版本。
+- **包管理器**: 推荐使用 `npm` 或 `pnpm`。
+- **Supabase**: 需要一个 Supabase 项目用于数据库。
+- **Cloudflare R2**: 用于存储上传和生成的图片。
 
-- Node.js (推荐 v20+)
-- pnpm / npm / yarn
-
-### 2. 克隆项目
+### 2. 克隆项目 & 安装依赖
 
 ```bash
 git clone https://github.com/deoooo/image-ai.git
 cd image-ai
-```
 
-### 3. 安装依赖
-
-```bash
 npm install
 # 或
 pnpm install
 ```
 
-### 4. 配置环境变量
+### 3. 配置环境变量
 
 复制 `.env` 模板文件并重命名为 `.env.local`：
 
@@ -57,38 +53,59 @@ pnpm install
 cp .env .env.local
 ```
 
-在 `.env.local` 中填入必要的配置信息：
+在 `.env.local` 中填入以下必要配置：
 
 ```env
-# AI API 配置 (示例：Grsai API)
-GRSAI_API_KEY=your_api_key_here
-GRSAI_API_BASE_URL=https://api.example.com
+# --- 核心服务 ---
+# Supabase 配置 (用于存储元数据)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+# 注意：后端使用 Service Role Key 以绕过 RLS 进行写入
+SUPABASE_SERVICE_ROLE_KEY=your_service_role_key
 
-# 数据库配置 (PostgreSQL)
-DATABASE_URL="postgresql://..."
+# --- 存储服务 ---
+# Cloudflare R2 配置 (用于图片存储)
+R2_ACCOUNT_ID=your_account_id
+R2_ACCESS_KEY_ID=your_access_key
+R2_SECRET_ACCESS_KEY=your_secret_key
+R2_BUCKET_NAME=your_bucket_name
+R2_PUBLIC_URL=https://pub-xxx.r2.dev
 
-# 存储配置 (如使用 Vercel Blob 或 S3)
-BLOB_READ_WRITE_TOKEN=...
-# 或 AWS/R2 配置
-AWS_ACCESS_KEY_ID=...
-AWS_SECRET_ACCESS_KEY=...
-AWS_REGION=...
-AWS_BUCKET_NAME=...
+# --- AI 服务 ---
+# Grsai API 配置 (用于图像生成)
+GRSAI_API_KEY=your_api_key
+# GRSAI_API_BASE_URL=https://api.grsai.com (可选)
+
+# --- 安全 ---
+# 访问密钥 (简单的访问控制)
+ACCESS_KEYS=your_secret_key_1,your_secret_key_2
 ```
 
-### 5. 初始化数据库
+### 4. 数据库初始化
 
-```bash
-npm run postinstall
+在 Supabase 项目的 SQL Editor 中执行以下 SQL 语句以创建数据表：
+
+```sql
+create table generations (
+  id uuid default gen_random_uuid() primary key,
+  task_id text not null,
+  prompt text not null,
+  model text,
+  image_url text,
+  status text default 'pending',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 启用 RLS
+alter table generations enable row level security;
 ```
 
-### 6. 启动开发服务器
+### 5. 启动开发服务器
 
 ```bash
 npm run dev
 ```
 
-打开浏览器访问 [http://localhost:3000](http://localhost:3000) 即可看到应用界面。
+打开浏览器访问 [http://localhost:3000](http://localhost:3000) 即可开始使用。
 
 ## 📖 使用指南
 

@@ -4,13 +4,21 @@ import { useState, useEffect } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { GenerationForm } from "@/components/GenerationForm";
 import { ImageGallery } from "@/components/ImageGallery";
-import { GeneratedImage, GenerationModel, UploadedImage, AspectRatio, ImageSize } from "@/types";
-import { Sparkles } from "lucide-react";
+import { HistoryGallery } from "@/components/HistoryGallery";
+import {
+  GeneratedImage,
+  GenerationModel,
+  UploadedImage,
+  AspectRatio,
+  ImageSize,
+} from "@/types";
+import { Sparkles, History as HistoryIcon } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 
 export default function Home() {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
+  const [historyImages, setHistoryImages] = useState<GeneratedImage[]>([]);
   const [prompt, setPrompt] = useState("");
   const [model, setModel] = useState<GenerationModel>("nano-banana-pro");
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>("auto");
@@ -18,10 +26,34 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<number>(0);
 
+  // Fetch history on mount
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        const key = localStorage.getItem("image_ai_access_key") || "";
+        if (!key) return;
+
+        const res = await fetch("/api/history", {
+          headers: { "x-access-key": key },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setHistoryImages(data);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load history", err);
+      }
+    };
+
+    fetchHistory();
+  }, [generatedImages]); // Refresh history when new images are generated/added locally
+
   const handleGenerate = async () => {
     setIsGenerating(true);
     setGenerationProgress(0);
-    
+
     try {
       const key = localStorage.getItem("image_ai_access_key") || "";
 
@@ -31,7 +63,7 @@ export default function Home() {
           const reader = new FileReader();
           reader.readAsDataURL(img.file);
           reader.onload = () => resolve(reader.result as string);
-          reader.onerror = error => reject(error);
+          reader.onerror = (error) => reject(error);
         });
       });
 
@@ -69,7 +101,7 @@ export default function Home() {
         progress: 0,
         // url is undefined (will be set when complete)
       };
-      
+
       setGeneratedImages([placeholderImage, ...generatedImages]);
 
       // Step 2: Poll for status
@@ -105,27 +137,33 @@ export default function Home() {
           setGenerationProgress(statusData.progress);
           setGeneratedImages((prev) =>
             prev.map((img) =>
-              img.id === taskId ? { ...img, progress: statusData.progress } : img
+              img.id === taskId
+                ? { ...img, progress: statusData.progress }
+                : img
             )
           );
         }
 
         // Check status
-        if (statusData.status === "succeeded" && statusData.results && statusData.results.length > 0) {
+        if (
+          statusData.status === "succeeded" &&
+          statusData.results &&
+          statusData.results.length > 0
+        ) {
           // Generation complete - update placeholder with final image
           const imageUrl = statusData.results[0].url;
           setGeneratedImages((prev) =>
             prev.map((img) =>
-              img.id === taskId
-                ? { ...img, url: imageUrl, progress: 100 }
-                : img
+              img.id === taskId ? { ...img, url: imageUrl, progress: 100 } : img
             )
           );
           setGenerationProgress(100);
         } else if (statusData.status === "failed") {
           // Remove placeholder on failure
           setGeneratedImages((prev) => prev.filter((img) => img.id !== taskId));
-          throw new Error(statusData.failure_reason || statusData.error || "Generation failed");
+          throw new Error(
+            statusData.failure_reason || statusData.error || "Generation failed"
+          );
         } else {
           // Still running, poll again
           await new Promise((resolve) => setTimeout(resolve, pollInterval));
@@ -136,7 +174,11 @@ export default function Home() {
       await poll();
     } catch (error) {
       console.error("Error generating image:", error);
-      alert(`Generation error: ${error instanceof Error ? error.message : "Unknown error"}`);
+      alert(
+        `Generation error: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     } finally {
       setIsGenerating(false);
       setGenerationProgress(0);
@@ -191,6 +233,18 @@ export default function Home() {
               </span>
             </div>
             <ImageGallery images={generatedImages} />
+          </section>
+
+          {/* History Section */}
+          <section className="mt-12 pt-12 border-t border-gray-200">
+            <div className="flex items-center gap-2 mb-6">
+              <HistoryIcon className="w-5 h-5 text-gray-500" />
+              <h2 className="text-xl font-semibold text-gray-900">History</h2>
+              <span className="text-sm text-gray-500 ml-auto">
+                {historyImages.length} saved
+              </span>
+            </div>
+            <HistoryGallery images={historyImages} />
           </section>
         </div>
       </div>

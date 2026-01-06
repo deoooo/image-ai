@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { GrsaiClient } from "@/lib/grsai";
-import { prisma } from "@/lib/prisma";
 import { validateAccessKey } from "@/lib/auth";
 import { uploadToR2 } from "@/lib/r2";
 
@@ -21,62 +20,128 @@ export async function POST(req: Request) {
       );
     }
 
-    const client = new GrsaiClient();
+    // Create a stream for real-time updates
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        const send = (data: any) => {
+          controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+        };
 
-    // 1. Upload input images to R2 if present (to get public URLs for Grsai)
-    let inputImageUrls: string[] = [];
-    if (images && images.length > 0) {
-      const uploadPromises = images.map(
-        async (base64Img: string, index: number) => {
-          // Base64 format: "data:image/png;base64,..."
-          const matches = base64Img.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-          if (!matches || matches.length !== 3) {
-            return null;
+        try {
+          const client = new GrsaiClient();
+
+          // 1. Upload input images to R2
+          let inputImageUrls: string[] = [];
+          if (images && images.length > 0) {
+            send({ type: "log", message: "Uploading input images..." });
+
+            const uploadPromises = images.map(
+              async (base64Img: string, index: number) => {
+                const matches = base64Img.match(
+                  /^data:([A-Za-z-+\/]+);base64,(.+)$/
+                );
+                if (!matches || matches.length !== 3) return null;
+
+                const contentType = matches[1];
+                const buffer = Buffer.from(matches[2], "base64");
+                const filename = `inputs/${Date.now()}-${index}.png`;
+
+                return await uploadToR2(filename, buffer, contentType);
+              }
+            );
+
+            const results = await Promise.all(uploadPromises);
+            inputImageUrls = results.filter((url): url is string => !!url);
           }
 
-          const contentType = matches[1];
-          const buffer = Buffer.from(matches[2], "base64");
-          const filename = `inputs/${Date.now()}-${index}.png`; // Simple unique name
+          // 2. Call Grsai API with Retry Logic
+          let taskId: string | null = null;
+          let attempts = 0;
+          const maxAttempts = 3;
 
-          return await uploadToR2(filename, buffer, contentType);
-        }
-      );
+          while (attempts < maxAttempts) {
+            attempts++;
+            try {
+              if (attempts > 1) {
+                send({
+                  type: "log",
+                  message: `Requesting generation (Attempt ${attempts}/${maxAttempts})...`,
+                });
+              } else {
+                send({ type: "log", message: "Requesting generation..." });
+              }
 
-      const results = await Promise.all(uploadPromises);
-      inputImageUrls = results.filter((url): url is string => !!url);
-    }
+              taskId = await client.draw({
+                model: (model as any) || "nano-banana-pro",
+                prompt,
+                aspectRatio: aspectRatio || "auto",
+                imageSize: imageSize || "1K",
+                urls: inputImageUrls,
+              });
 
-    // 2. Call Grsai API to initiate generation (returns task ID immediately)
-    const taskId = await client.draw({
-      model: (model as any) || "nano-banana-pro",
-      prompt,
-      aspectRatio: aspectRatio || "auto",
-      imageSize: imageSize || "1K",
-      urls: inputImageUrls,
-    });
+              // If successful, break the loop
+              break;
+            } catch (err: any) {
+              console.error(`Attempt ${attempts} failed:`, err);
+              if (attempts === maxAttempts) {
+                // Determine if we should throw or just report error
+                throw new Error(
+                  `Failed after ${maxAttempts} attempts: ${err.message}`
+                );
+              }
+              // Wait before retry (exponential backoff or fixed)
+              send({
+                type: "log",
+                message: `Generation request failed, retrying in 2s...`,
+              });
+              await new Promise((resolve) => setTimeout(resolve, 2000));
+            }
+          }
 
-    console.log("Generation task created:", taskId);
+          if (!taskId) {
+            throw new Error("Failed to obtain Task ID");
+          }
 
-    // Save to Supabase (non-blocking)
-    import("@/lib/supabase")
-      .then(async ({ supabaseAdmin }) => {
-        if (supabaseAdmin) {
-          await supabaseAdmin.from("generations").insert({
-            task_id: taskId,
+          send({ type: "log", message: "Task started successfully." });
+
+          // 3. Save to Supabase (fire and forget from stream's perspective, or await)
+          // We can await it to ensure DB is consistent before sending final result
+          const { supabaseAdmin } = await import("@/lib/supabase");
+          if (supabaseAdmin) {
+            await supabaseAdmin.from("generations").insert({
+              task_id: taskId,
+              prompt,
+              model,
+              status: "pending",
+            });
+          }
+
+          // 4. Send Result
+          send({
+            type: "result",
+            taskId,
+            status: "pending",
             prompt,
             model,
-            status: "pending",
           });
+        } catch (error: any) {
+          console.error("Stream processing error:", error);
+          send({
+            type: "error",
+            message: error.message || "Internal Server Error",
+          });
+        } finally {
+          controller.close();
         }
-      })
-      .catch((err) => console.error("Failed to save to Supabase:", err));
+      },
+    });
 
-    // Return task ID immediately for frontend polling
-    return NextResponse.json({
-      taskId,
-      status: "pending",
-      prompt,
-      model,
+    return new NextResponse(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked",
+      },
     });
   } catch (error: any) {
     console.error("Generation error:", error);

@@ -25,6 +25,7 @@ export default function Home() {
   const [imageSize, setImageSize] = useState<ImageSize>("1K");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<number>(0);
+  const [statusMessage, setStatusMessage] = useState<string>("");
 
   // Fetch history on mount
   useEffect(() => {
@@ -99,7 +100,41 @@ export default function Home() {
         throw new Error("Generation failed");
       }
 
-      const { taskId } = await response.json();
+      if (!response.body) throw new Error("No response body");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let taskId = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split("\n").filter((line) => line.trim() !== "");
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            if (data.type === "log") {
+              console.log("Log:", data.message);
+              setStatusMessage(data.message);
+            } else if (data.type === "error") {
+              throw new Error(data.message);
+            } else if (data.type === "result") {
+              taskId = data.taskId;
+            }
+          } catch (e) {
+            console.error("Error parsing chunk:", e);
+          }
+        }
+      }
+
+      if (!taskId) {
+        throw new Error("Failed to get Task ID from stream");
+      }
+
       console.log("Task ID:", taskId);
 
       // Create placeholder image immediately
@@ -191,7 +226,9 @@ export default function Home() {
       );
     } finally {
       setIsGenerating(false);
+
       setGenerationProgress(0);
+      setStatusMessage("");
     }
   };
 
@@ -230,6 +267,12 @@ export default function Home() {
               isGenerating={isGenerating}
               progress={generationProgress}
             />
+            {statusMessage && (
+              <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg flex items-center gap-2 animate-pulse">
+                <Sparkles className="w-4 h-4" />
+                {statusMessage}
+              </div>
+            )}
           </section>
         </div>
 

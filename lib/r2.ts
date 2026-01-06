@@ -35,3 +35,25 @@ export async function uploadToR2(
 
   return `${R2_PUBLIC_URL}/${key}`;
 }
+
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+export async function getPresignedUrl(
+  key: string,
+  contentType: string
+): Promise<{ uploadUrl: string; publicUrl: string }> {
+  if (!R2_BUCKET_NAME || !R2_PUBLIC_URL) {
+    throw new Error("R2 configuration missing");
+  }
+
+  const command = new PutObjectCommand({
+    Bucket: R2_BUCKET_NAME,
+    Key: key,
+    ContentType: contentType,
+  });
+
+  const uploadUrl = await getSignedUrl(S3, command, { expiresIn: 3600 });
+  const publicUrl = `${R2_PUBLIC_URL}/${key}`;
+
+  return { uploadUrl, publicUrl };
+}

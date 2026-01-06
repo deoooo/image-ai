@@ -31,28 +31,11 @@ export async function POST(req: Request) {
         try {
           const client = new GrsaiClient();
 
-          // 1. Upload input images to R2
+          // 1. Use provided image URLs
           let inputImageUrls: string[] = [];
-          if (images && images.length > 0) {
-            send({ type: "log", message: "Uploading input images..." });
-
-            const uploadPromises = images.map(
-              async (base64Img: string, index: number) => {
-                const matches = base64Img.match(
-                  /^data:([A-Za-z-+\/]+);base64,(.+)$/
-                );
-                if (!matches || matches.length !== 3) return null;
-
-                const contentType = matches[1];
-                const buffer = Buffer.from(matches[2], "base64");
-                const filename = `inputs/${Date.now()}-${index}.png`;
-
-                return await uploadToR2(filename, buffer, contentType);
-              }
-            );
-
-            const results = await Promise.all(uploadPromises);
-            inputImageUrls = results.filter((url): url is string => !!url);
+          if (images && Array.isArray(images) && images.length > 0) {
+            send({ type: "log", message: "Using uploaded input images..." });
+            inputImageUrls = images;
           }
 
           // 2. Call Grsai API with Retry Logic

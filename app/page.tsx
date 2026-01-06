@@ -68,14 +68,37 @@ export default function Home() {
     try {
       const key = localStorage.getItem("image_ai_access_key") || "";
 
-      // Convert images to Base64 directly
+      // Upload images to R2
+      setStatusMessage("Uploading input images...");
       const imagePromises = uploadedImages.map(async (img) => {
-        return new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.readAsDataURL(img.file);
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = (error) => reject(error);
+        const filename = `inputs/${Date.now()}-${img.file.name}`;
+
+        // 1. Get presigned URL
+        const presignedRes = await fetch("/api/upload/presigned", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-access-key": key,
+          },
+          body: JSON.stringify({
+            filename,
+            contentType: img.file.type,
+          }),
         });
+
+        if (!presignedRes.ok) throw new Error("Failed to get upload URL");
+        const { uploadUrl, publicUrl } = await presignedRes.json();
+
+        // 2. Upload file
+        const uploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          body: img.file,
+          headers: { "Content-Type": img.file.type },
+        });
+
+        if (!uploadRes.ok) throw new Error("Failed to upload image");
+
+        return publicUrl;
       });
 
       const imageUrls = await Promise.all(imagePromises);

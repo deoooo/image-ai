@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GrsaiClient } from "@/lib/grsai";
 import { validateAccessKey } from "@/lib/auth";
+import { fetchWithProxy } from "@/lib/http";
 
 export async function POST(req: Request) {
   try {
@@ -34,7 +35,7 @@ export async function POST(req: Request) {
       let finalImageUrl = imageUrl;
       try {
         const { uploadToR2 } = await import("@/lib/r2");
-        const imageRes = await fetch(imageUrl);
+        const imageRes = await fetchWithProxy(imageUrl);
         if (imageRes.ok) {
           const arrayBuffer = await imageRes.arrayBuffer();
           const buffer = Buffer.from(arrayBuffer);

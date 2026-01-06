@@ -1,6 +1,8 @@
 import { uploadToR2 } from "./r2";
+import { fetchWithProxy } from "./http";
 
-const GRSAI_API_BASE_URL = process.env.GRSAI_API_BASE_URL || "https://api.grsai.com";
+const GRSAI_API_BASE_URL =
+  process.env.GRSAI_API_BASE_URL || "https://api.grsai.com";
 const GRSAI_API_KEY = process.env.GRSAI_API_KEY;
 
 export interface GrsaiDrawRequest {
@@ -14,10 +16,12 @@ export interface GrsaiDrawRequest {
 
 export interface GrsaiDrawResponse {
   id: string;
-  results: {
-    url: string;
-    content: string;
-  }[] | null;
+  results:
+    | {
+        url: string;
+        content: string;
+      }[]
+    | null;
   progress: number;
   status: "queued" | "running" | "succeeded" | "failed";
   failure_reason?: string;
@@ -34,27 +38,36 @@ export class GrsaiClient {
   }
 
   async draw(params: GrsaiDrawRequest): Promise<string> {
-    console.log("Requesting Grsai API with params:", JSON.stringify(params, null, 2));
-    
-    const response = await fetch(`${this.baseUrl}/v1/draw/nano-banana`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify({
-        model: params.model || "nano-banana-pro",
-        prompt: params.prompt,
-        aspectRatio: params.aspectRatio || "auto",
-        imageSize: params.imageSize || "1K",
-        urls: params.urls || [],
-        webHook: "-1", // Fixed value for polling mode
-        shutProgress: false, // Disable progress in webhook
-      }),
-    });
+    console.log(
+      "Requesting Grsai API with params:",
+      JSON.stringify(params, null, 2)
+    );
+
+    const response = await fetchWithProxy(
+      `${this.baseUrl}/v1/draw/nano-banana`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        body: JSON.stringify({
+          model: params.model || "nano-banana-pro",
+          prompt: params.prompt,
+          aspectRatio: params.aspectRatio || "auto",
+          imageSize: params.imageSize || "1K",
+          urls: params.urls || [],
+          webHook: "-1", // Fixed value for polling mode
+          shutProgress: false, // Disable progress in webhook
+        }),
+      }
+    );
 
     console.log("Grsai API Response Status:", response.status);
-    console.log("Grsai API Response Headers:", Object.fromEntries(response.headers.entries()));
+    console.log(
+      "Grsai API Response Headers:",
+      Object.fromEntries(response.headers.entries())
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -77,8 +90,8 @@ export class GrsaiClient {
 
   async getResult(taskId: string): Promise<GrsaiDrawResponse> {
     console.log("Fetching result for task:", taskId);
-    
-    const response = await fetch(`${this.baseUrl}/v1/draw/result`, {
+
+    const response = await fetchWithProxy(`${this.baseUrl}/v1/draw/result`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -108,18 +121,28 @@ export class GrsaiClient {
   }
 
   // Polling method for server-side use
-  async pollResult(taskId: string, intervalMs = 2000, timeoutMs = 120000): Promise<string[]> {
+  async pollResult(
+    taskId: string,
+    intervalMs = 2000,
+    timeoutMs = 120000
+  ): Promise<string[]> {
     const startTime = Date.now();
 
     while (Date.now() - startTime < timeoutMs) {
       const result = await this.getResult(taskId);
 
-      if (result.status === "succeeded" && result.results && result.results.length > 0) {
+      if (
+        result.status === "succeeded" &&
+        result.results &&
+        result.results.length > 0
+      ) {
         return result.results.map((r: any) => r.url);
       }
 
       if (result.status === "failed") {
-        throw new Error(result.failure_reason || result.error || "Generation failed");
+        throw new Error(
+          result.failure_reason || result.error || "Generation failed"
+        );
       }
 
       // Still running, wait before next poll

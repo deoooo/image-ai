@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { ImageUploader } from "@/components/ImageUploader";
 import { GenerationForm } from "@/components/GenerationForm";
 import { ImageGallery } from "@/components/ImageGallery";
-import { HistoryGallery } from "@/components/HistoryGallery";
+
 import {
   GeneratedImage,
   GenerationModel,
@@ -12,7 +12,7 @@ import {
   AspectRatio,
   ImageSize,
 } from "@/types";
-import { Sparkles, History as HistoryIcon } from "lucide-react";
+import { Sparkles } from "lucide-react";
 import { upload } from "@vercel/blob/client";
 
 export default function Home() {
@@ -48,7 +48,17 @@ export default function Home() {
     };
 
     fetchHistory();
-  }, [generatedImages]); // Refresh history when new images are generated/added locally
+    fetchHistory();
+  }, []); // Only fetch on mount
+
+  // Merge generated (new active session) and history (fetched)
+  // Ensure we don't show duplicates if history fetch includes recently generated ones
+  // But generally, generatedImages will be empty on mount, and historyImages will populate.
+  // When we generate a new one, it adds to generatedImages.
+  const allImages = [
+    ...generatedImages,
+    ...historyImages.filter((h) => !generatedImages.some((g) => g.id === h.id)),
+  ];
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -229,22 +239,10 @@ export default function Home() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-semibold text-gray-900">Gallery</h2>
               <span className="text-sm text-gray-500">
-                {generatedImages.length} generated
+                {allImages.length} images
               </span>
             </div>
-            <ImageGallery images={generatedImages} />
-          </section>
-
-          {/* History Section */}
-          <section className="mt-12 pt-12 border-t border-gray-200">
-            <div className="flex items-center gap-2 mb-6">
-              <HistoryIcon className="w-5 h-5 text-gray-500" />
-              <h2 className="text-xl font-semibold text-gray-900">History</h2>
-              <span className="text-sm text-gray-500 ml-auto">
-                {historyImages.length} saved
-              </span>
-            </div>
-            <HistoryGallery images={historyImages} />
+            <ImageGallery images={allImages} />
           </section>
         </div>
       </div>

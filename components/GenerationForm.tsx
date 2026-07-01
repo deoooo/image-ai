@@ -44,7 +44,6 @@ export function GenerationForm({
           className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
         >
           <option value="nano-banana-fast">Nano Banana Fast</option>
-          <option value="nano-banana">Nano Banana</option>
           <option value="nano-banana-pro">Nano Banana Pro</option>
         </select>
       </div>

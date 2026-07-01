@@ -6,7 +6,7 @@ const GRSAI_API_BASE_URL =
 const GRSAI_API_KEY = process.env.GRSAI_API_KEY;
 
 export interface GrsaiDrawRequest {
-  model?: "nano-banana-fast" | "nano-banana" | "nano-banana-pro";
+  model?: "nano-banana-fast" | "nano-banana-pro";
   prompt: string;
   aspectRatio?: string;
   imageSize?: "1K" | "2K" | "4K";

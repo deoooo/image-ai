@@ -17,4 +17,8 @@ describe("password hashing", () => {
 
     expect(await verifyPassword("secret123", `${hash}:junk`)).toBe(false);
   });
+
+  test("rejects a stored hash with a malformed non-hex key", async () => {
+    expect(await verifyPassword("any-password", "scrypt:salt:nothex")).toBe(false);
+  });
 });

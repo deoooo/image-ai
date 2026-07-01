@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 
 const scrypt = promisify(scryptCallback);
 const KEY_LENGTH = 64;
+const HEX_KEY_PATTERN = /^[0-9a-fA-F]+$/;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16).toString("hex");
@@ -18,6 +19,9 @@ export async function verifyPassword(password: string, storedHash: string): Prom
 
   const [algorithm, salt, key] = parts;
   if (algorithm !== "scrypt" || !salt || !key) {
+    return false;
+  }
+  if (key.length % 2 !== 0 || !HEX_KEY_PATTERN.test(key)) {
     return false;
   }
 

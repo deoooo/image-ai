@@ -70,3 +70,24 @@
 - Command: `npm exec tsc --noEmit --pretty false`
 - Result: PASS
 - Note: npm emitted the existing config warnings for `--noEmit` and `--pretty`, but TypeScript completed with exit code 0.
+
+## Task 3 Password Key Validation Fix
+
+### TDD Evidence
+- RED command: `npm test -- test/password.test.ts`
+- RED result: FAIL as expected
+- Failure:
+  - `verifyPassword("any-password", "scrypt:salt:nothex")` returned `true` instead of `false`
+
+### Verification Output
+- Command: `npm test -- test/password.test.ts`
+- Result: PASS
+- Output summary: 1 test file passed, 4 tests passed
+
+- Command: `npm test -- test/password.test.ts test/auth.test.ts`
+- Result: PASS
+- Output summary: 2 test files passed, 9 tests passed
+
+- Command: `npm exec tsc --noEmit --pretty false`
+- Result: PASS
+- Note: npm emitted the existing config warnings for `--noEmit` and `--pretty`, but TypeScript completed with exit code 0.

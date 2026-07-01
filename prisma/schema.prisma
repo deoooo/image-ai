@@ -7,11 +7,30 @@ datasource db {
 }
 
 model Generation {
-  id        String   @id @default(cuid())
-  prompt    String
-  model     String
-  imageUrl  String
-  createdAt DateTime @default(now())
-  
+  id           String   @id @default(cuid())
+  taskId       String?  @unique
+  prompt       String
+  model        String
+  imageUrl     String?
+  status       String   @default("pending")
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  priceCharged Int      @default(0)
+  chargeStatus String   @default("not_charged")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
   @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([taskId])
+}
+
+model User {
+  id           String       @id @default(cuid())
+  username     String       @unique
+  passwordHash String
+  balance      Int          @default(0)
+  generations  Generation[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 }

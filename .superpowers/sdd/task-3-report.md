@@ -53,3 +53,20 @@
 - Command: `npm exec tsc --noEmit --pretty false`
 - Result: PASS
 - Note: npm printed the existing `--noEmit` / `--pretty` warning, but typecheck completed successfully with exit code 0.
+
+## Task 3 Fix Update
+
+### TDD Evidence
+- RED command: `npm test -- test/auth.test.ts test/password.test.ts`
+- RED result: FAIL as expected
+- Failure 1: `verifySessionToken(\`\${token}.junk\`)` returned the original session instead of `null`
+- Failure 2: `verifyPassword("secret123", \`\${hash}:junk\`)` returned `true` instead of `false`
+
+### Verification Output
+- Command: `npm test -- test/auth.test.ts test/password.test.ts`
+- Result: PASS
+- Output summary: 2 test files passed, 8 tests passed
+
+- Command: `npm exec tsc --noEmit --pretty false`
+- Result: PASS
+- Note: npm emitted the existing config warnings for `--noEmit` and `--pretty`, but TypeScript completed with exit code 0.

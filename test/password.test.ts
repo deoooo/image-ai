@@ -11,4 +11,10 @@ describe("password hashing", () => {
     const hash = await hashPassword("secret123");
     expect(await verifyPassword("wrong", hash)).toBe(false);
   });
+
+  test("rejects a stored hash with extra colon-separated segments", async () => {
+    const hash = await hashPassword("secret123");
+
+    expect(await verifyPassword("secret123", `${hash}:junk`)).toBe(false);
+  });
 });

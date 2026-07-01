@@ -42,4 +42,11 @@ describe("auth sessions", () => {
 
     expect(verifySessionToken(tampered)).toBeNull();
   });
+
+  test("rejects a token with extra dot-separated segments", () => {
+    vi.stubEnv("SESSION_SECRET", "test-secret");
+    const token = createSessionToken({ role: "admin", username: "lynn" });
+
+    expect(verifySessionToken(`${token}.junk`)).toBeNull();
+  });
 });

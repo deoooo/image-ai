@@ -11,7 +11,12 @@ export async function hashPassword(password: string): Promise<string> {
 }
 
 export async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  const [algorithm, salt, key] = storedHash.split(":");
+  const parts = storedHash.split(":");
+  if (parts.length !== 3) {
+    return false;
+  }
+
+  const [algorithm, salt, key] = parts;
   if (algorithm !== "scrypt" || !salt || !key) {
     return false;
   }

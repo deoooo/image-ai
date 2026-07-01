@@ -82,7 +82,12 @@ export function createSessionToken(session: Session): string {
 }
 
 export function verifySessionToken(token: string): Session | null {
-  const [payload, signature] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  const [payload, signature] = parts;
   if (!payload || !signature) {
     return null;
   }

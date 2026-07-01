@@ -45,3 +45,6 @@ next-env.d.ts
 
 # local worktrees
 .worktrees/
+
+# local superpowers execution scratch
+.superpowers/

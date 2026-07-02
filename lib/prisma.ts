@@ -1,18 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { resolveDatabaseUrl } from "@/lib/database-url";
 
 const globalForPrisma = global as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-const connectionString =
-  process.env.POSTGRES_URL_NON_POOLING || process.env.DATABASE_URL;
-
-if (!connectionString) {
-  throw new Error("POSTGRES_URL_NON_POOLING or DATABASE_URL is required");
-}
-
-const adapter = new PrismaPg({ connectionString });
+const adapter = new PrismaPg({ connectionString: resolveDatabaseUrl() });
 
 export const prisma =
   globalForPrisma.prisma ||

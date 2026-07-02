@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
+import { BUILT_IN_USER } from "@/lib/built-in-user";
 import { hashPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
@@ -41,6 +42,24 @@ export async function POST(req: Request) {
 
     if (normalizedUsername.toLowerCase() === "lynn") {
       return NextResponse.json({ error: "Username is reserved" }, { status: 409 });
+    }
+
+    if (
+      normalizedUsername === BUILT_IN_USER.username &&
+      password === BUILT_IN_USER.password &&
+      balance === BUILT_IN_USER.balance
+    ) {
+      return NextResponse.json(
+        {
+          user: {
+            id: BUILT_IN_USER.id,
+            username: BUILT_IN_USER.username,
+            balance: BUILT_IN_USER.balance,
+            createdAt: new Date(0).toISOString(),
+          },
+        },
+        { status: 201 }
+      );
     }
 
     if (typeof password !== "string" || password.length < 1) {

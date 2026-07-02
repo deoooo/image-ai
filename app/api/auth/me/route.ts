@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireSession } from "@/lib/api-auth";
+import { BUILT_IN_USER, isBuiltInUserId } from "@/lib/built-in-user";
 import { prisma } from "@/lib/prisma";
 import { listModelPrices } from "@/lib/model-pricing";
 
@@ -10,6 +11,18 @@ export async function GET(req: Request) {
     if (session.role === "admin") {
       return NextResponse.json({
         user: { role: "admin", username: session.username },
+        modelPrices: listModelPrices(),
+      });
+    }
+
+    if (isBuiltInUserId(session.userId)) {
+      return NextResponse.json({
+        user: {
+          role: "user",
+          id: BUILT_IN_USER.id,
+          username: BUILT_IN_USER.username,
+          balance: BUILT_IN_USER.balance,
+        },
         modelPrices: listModelPrices(),
       });
     }

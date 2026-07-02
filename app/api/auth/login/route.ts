@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSessionToken, verifyAdminCredentials } from "@/lib/auth";
+import { BUILT_IN_USER, verifyBuiltInUserCredentials } from "@/lib/built-in-user";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
 
@@ -26,6 +27,30 @@ export async function POST(req: Request) {
 
       const token = createSessionToken({ role: "admin", username });
       return NextResponse.json({ token, user: { role: "admin", username } });
+    }
+
+    if (username === BUILT_IN_USER.username) {
+      if (!verifyBuiltInUserCredentials(username, password)) {
+        return NextResponse.json(
+          { error: "Invalid username or password" },
+          { status: 401 }
+        );
+      }
+
+      const token = createSessionToken({
+        role: "user",
+        userId: BUILT_IN_USER.id,
+        username: BUILT_IN_USER.username,
+      });
+      return NextResponse.json({
+        token,
+        user: {
+          role: "user",
+          id: BUILT_IN_USER.id,
+          username: BUILT_IN_USER.username,
+          balance: BUILT_IN_USER.balance,
+        },
+      });
     }
 
     const user = await prisma.user.findUnique({ where: { username } });

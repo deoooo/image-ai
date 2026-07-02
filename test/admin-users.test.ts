@@ -166,6 +166,32 @@ describe("admin users API", () => {
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
+  test("creates the built-in deo user without requiring database access", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "deo",
+          password: "deo2026",
+          balance: 0,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({
+      user: {
+        id: "builtin_deo",
+        username: "deo",
+        balance: 0,
+        createdAt: expect.any(String),
+      },
+    });
+    expect(hashPasswordMock.hashPassword).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
   test("rejects non-admin access with the auth error status", async () => {
     apiAuthMock.requireAdmin.mockImplementationOnce(() => {
       throw new apiAuthMock.ApiAuthError("Forbidden", 403);

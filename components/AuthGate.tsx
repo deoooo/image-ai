@@ -31,12 +31,16 @@ export function AuthGate({ children }: AuthGateProps) {
     setModelPrices([]);
   }, []);
 
-  const logout = useCallback(() => {
+  const clearStoredSession = useCallback(() => {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     clearSession();
+  }, [clearSession]);
+
+  const logout = useCallback(() => {
+    clearStoredSession();
     setPassword("");
     setError("");
-  }, [clearSession]);
+  }, [clearStoredSession]);
 
   const loadSession = useCallback(async (nextToken: string) => {
     const res = await fetch("/api/auth/me", {
@@ -59,8 +63,13 @@ export function AuthGate({ children }: AuthGateProps) {
       return;
     }
 
-    await loadSession(token);
-  }, [loadSession, token]);
+    try {
+      await loadSession(token);
+    } catch (error) {
+      clearStoredSession();
+      throw error;
+    }
+  }, [clearStoredSession, loadSession, token]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
@@ -71,13 +80,12 @@ export function AuthGate({ children }: AuthGateProps) {
 
     void loadSession(storedToken)
       .catch(() => {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-        clearSession();
+        clearStoredSession();
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, [clearSession, loadSession]);
+  }, [clearStoredSession, loadSession]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,8 +114,7 @@ export function AuthGate({ children }: AuthGateProps) {
       setPassword("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
-      clearSession();
+      clearStoredSession();
     } finally {
       setIsLoading(false);
     }

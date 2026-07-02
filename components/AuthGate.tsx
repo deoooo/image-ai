@@ -1,105 +1,192 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Lock } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
+import { Lock, LogOut } from "lucide-react";
+import type { AuthenticatedUser, ModelPrice } from "@/types";
 
 interface AuthGateProps {
+  children: (props: {
+    token: string;
+    user: AuthenticatedUser;
+    modelPrices: ModelPrice[];
+    refreshSession: () => Promise<void>;
+    logout: () => void;
+  }) => React.ReactNode;
+}
+
+interface LegacyAuthGateProps {
   children: React.ReactNode;
 }
 
-export function AuthGate({ children }: AuthGateProps) {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [accessKey, setAccessKey] = useState("");
+const TOKEN_STORAGE_KEY = "image_ai_session_token";
+
+export function AuthGate({ children }: AuthGateProps): React.ReactNode;
+export function AuthGate({ children }: LegacyAuthGateProps): React.ReactNode;
+export function AuthGate({ children }: AuthGateProps | LegacyAuthGateProps) {
+  const [token, setToken] = useState("");
+  const [user, setUser] = useState<AuthenticatedUser | null>(null);
+  const [modelPrices, setModelPrices] = useState<ModelPrice[]>([]);
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    // Check local storage on mount
-    const storedKey = localStorage.getItem("image_ai_access_key");
-    if (storedKey) {
-      verifyKey(storedKey);
-    } else {
-      setIsLoading(false);
-    }
+  const clearSession = useCallback(() => {
+    setToken("");
+    setUser(null);
+    setModelPrices([]);
   }, []);
 
-  const verifyKey = async (key: string) => {
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    clearSession();
+    setPassword("");
+    setError("");
+  }, [clearSession]);
+
+  const loadSession = useCallback(async (nextToken: string) => {
+    const res = await fetch("/api/auth/me", {
+      headers: { Authorization: `Bearer ${nextToken}` },
+    });
+    if (!res.ok) {
+      throw new Error("Session expired");
+    }
+    const data = (await res.json()) as {
+      user: AuthenticatedUser;
+      modelPrices?: ModelPrice[];
+    };
+    setToken(nextToken);
+    setUser(data.user);
+    setModelPrices(data.modelPrices || []);
+  }, []);
+
+  const refreshSession = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    await loadSession(token);
+  }, [loadSession, token]);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (!storedToken) {
+      setIsLoading(false);
+      return;
+    }
+
+    void loadSession(storedToken)
+      .catch(() => {
+        localStorage.removeItem(TOKEN_STORAGE_KEY);
+        clearSession();
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [clearSession, loadSession]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+
     try {
-      // We verify by making a lightweight API call or just checking if it works
-      // For simplicity, we'll assume if the API accepts it, it's valid.
-      // But since we don't have a dedicated "verify" endpoint, we can just save it
-      // and let the first API call fail if it's wrong.
-      // However, for better UX, let's add a verify endpoint or just trust the user 
-      // until they try to generate. 
-      
-      // Actually, let's add a simple verify endpoint to be sure.
-      const res = await fetch("/api/auth/verify", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ username, password }),
       });
+      const data = (await res.json().catch(() => null)) as
+        | {
+            token?: string;
+            error?: string;
+          }
+        | null;
 
-      if (res.ok) {
-        setIsAuthenticated(true);
-        localStorage.setItem("image_ai_access_key", key);
-        setError("");
-      } else {
-        setError("Invalid access key");
-        localStorage.removeItem("image_ai_access_key");
+      if (!res.ok || !data?.token) {
+        throw new Error(data?.error || "Login failed");
       }
+
+      localStorage.setItem(TOKEN_STORAGE_KEY, data.token);
+      await loadSession(data.token);
+      setPassword("");
     } catch (err) {
-      setError("Failed to verify key");
+      setError(err instanceof Error ? err.message : "Login failed");
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      clearSession();
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    verifyKey(accessKey);
-  };
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-gray-900" />
       </div>
     );
   }
 
-  if (isAuthenticated) {
-    return <>{children}</>;
+  if (token && user) {
+    const sessionProps = {
+      token,
+      user,
+      modelPrices,
+      refreshSession,
+      logout,
+    };
+
+    return (
+      <>
+        <button
+          type="button"
+          onClick={logout}
+          className="fixed right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
+          aria-label="Log out"
+          title="Log out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+        {typeof children === "function" ? children(sessionProps) : children}
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 space-y-6">
+      <div className="w-full max-w-md space-y-6 rounded-lg bg-white p-8 shadow-xl">
         <div className="text-center space-y-2">
-          <div className="inline-flex p-3 bg-gray-100 rounded-full">
+          <div className="inline-flex rounded-full bg-gray-100 p-3">
             <Lock className="w-6 h-6 text-gray-600" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Access Required</h1>
-          <p className="text-gray-500">Please enter your access key to continue.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Sign in</h1>
+          <p className="text-gray-500">Use your Image AI account.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <input
-              type="password"
-              value={accessKey}
-              onChange={(e) => setAccessKey(e.target.value)}
-              placeholder="Enter access key"
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-            />
-            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
-          </div>
+          <input
+            type="text"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            placeholder="Username"
+            autoComplete="username"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="Password"
+            autoComplete="current-password"
+            className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-blue-500"
+          />
+          {error && <p className="text-sm text-red-500">{error}</p>}
           <button
             type="submit"
-            disabled={!accessKey}
-            className="w-full py-3 px-4 bg-gray-900 text-white rounded-lg font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={isLoading || !username.trim() || !password}
+            className="w-full rounded-lg bg-gray-900 px-4 py-3 font-medium text-white transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            Enter
+            Sign in
           </button>
         </form>
       </div>

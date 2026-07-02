@@ -4,11 +4,11 @@ export type ImageSize = "1K" | "2K" | "4K";
 
 export interface GeneratedImage {
   id: string;
-  url?: string; // Optional during generation
+  url?: string;
   prompt: string;
   model: GenerationModel;
   createdAt: number;
-  progress?: number; // Progress percentage during generation
+  progress?: number;
 }
 
 export interface UploadedImage {
@@ -16,3 +16,12 @@ export interface UploadedImage {
   file: File;
   preview: string;
 }
+
+export interface ModelPrice {
+  model: GenerationModel;
+  price: number;
+}
+
+export type AuthenticatedUser =
+  | { role: "admin"; username: string }
+  | { role: "user"; id: string; username: string; balance: number };

@@ -21,7 +21,7 @@
 
 - **前端框架**: [Next.js 16](https://nextjs.org/) (App Router)
 - **UI 库**: React 19, [Tailwind CSS v4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
-- **数据库**: [Supabase](https://supabase.com/) (PostgreSQL)
+- **数据库**: Prisma + PostgreSQL
 - **对象存储**: Cloudflare R2
 - **AI 服务**: 支持多种 AI 图像生成服务 (如 Grsai API 等)
 
@@ -31,7 +31,8 @@
 
 - **Node.js**: 推荐 v20 或更高版本。
 - **包管理器**: 推荐使用 `npm` 或 `pnpm`。
-- **Supabase**: 需要一个 Supabase 项目用于数据库。
+- **PostgreSQL**: 需要可用的 PostgreSQL 数据库连接。
+- **Prisma**: 需要运行 Prisma 迁移与客户端生成。
 - **Cloudflare R2**: 用于存储上传和生成的图片。
 
 ### 2. 克隆项目 & 安装依赖
@@ -47,10 +48,10 @@ pnpm install
 
 ### 3. 配置环境变量
 
-复制 `.env` 模板文件并重命名为 `.env.local`：
+复制 `.env.example` 模板文件并重命名为 `.env.local`：
 
 ```bash
-cp .env .env.local
+cp .env.example .env.local
 ```
 
 在 `.env.local` 中填入以下必要配置：
@@ -75,28 +76,24 @@ R2_PUBLIC_URL=https://pub-xxx.r2.dev
 GRSAI_API_KEY=your_api_key
 # GRSAI_API_BASE_URL=https://api.grsai.com (可选)
 
+# --- Database ---
+# Prisma/PostgreSQL connection string.
+DATABASE_URL=postgresql://user:password@host:5432/database
+# Current Prisma config in prisma.config.ts still reads POSTGRES_URL_NON_POOLING.
+POSTGRES_URL_NON_POOLING=postgresql://user:password@host:5432/database
+
 # --- 安全 ---
-# 访问密钥 (简单的访问控制)
-ACCESS_KEYS=your_secret_key_1,your_secret_key_2
+# Used to sign browser session tokens.
+SESSION_SECRET=replace_with_a_long_random_secret
 ```
 
-### 4. 数据库初始化
+### 4. 数据库迁移
 
-在 Supabase 项目的 SQL Editor 中执行以下 SQL 语句以创建数据表：
+The application uses Prisma with PostgreSQL. After updating environment variables, run:
 
-```sql
-create table generations (
-  id uuid default gen_random_uuid() primary key,
-  task_id text not null,
-  prompt text not null,
-  model text,
-  image_url text,
-  status text default 'pending',
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 启用 RLS
-alter table generations enable row level security;
+```bash
+npx prisma generate
+npx prisma migrate dev
 ```
 
 ### 5. 启动开发服务器
@@ -109,7 +106,23 @@ npm run dev
 
 ## 📖 使用指南
 
-1. **访问授权**: 首次使用可能需要配置访问密钥（Access Key），该密钥在 API 请求头中传递。
+### Authentication
+
+The temporary administrator account is:
+
+- Username: `lynn`
+- Password: `lynn2026`
+
+Administrators create regular users and set balances from the user management
+screen. Regular users sign in with username and password.
+
+### Billing
+
+Each generation charges the current model's code-defined price from the user's
+balance. If the balance is insufficient, generation is rejected. If a charged
+generation fails, the charge is refunded once.
+
+1. **登录**: 使用管理员账号或普通用户账号登录。
 2. **生成图片**:
    - 在输入框中输入描述性的提示词（Prompt）。
    - (可选) 上传参考图片。

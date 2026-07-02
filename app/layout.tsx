@@ -10,8 +10,6 @@ export const metadata: Metadata = {
   description: "Generate images from text or transform existing images using AI.",
 };
 
-import { AuthGate } from "@/components/AuthGate";
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -19,9 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={cn(inter.className, "bg-gray-50 min-h-screen")}>
-        <AuthGate>{children}</AuthGate>
-      </body>
+      <body className={cn(inter.className, "bg-gray-50 min-h-screen")}>{children}</body>
     </html>
   );
 }

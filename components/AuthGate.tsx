@@ -14,15 +14,9 @@ interface AuthGateProps {
   }) => React.ReactNode;
 }
 
-interface LegacyAuthGateProps {
-  children: React.ReactNode;
-}
-
 const TOKEN_STORAGE_KEY = "image_ai_session_token";
 
-export function AuthGate({ children }: AuthGateProps): React.ReactNode;
-export function AuthGate({ children }: LegacyAuthGateProps): React.ReactNode;
-export function AuthGate({ children }: AuthGateProps | LegacyAuthGateProps) {
+export function AuthGate({ children }: AuthGateProps) {
   const [token, setToken] = useState("");
   const [user, setUser] = useState<AuthenticatedUser | null>(null);
   const [modelPrices, setModelPrices] = useState<ModelPrice[]>([]);
@@ -147,7 +141,7 @@ export function AuthGate({ children }: AuthGateProps | LegacyAuthGateProps) {
         >
           <LogOut className="h-4 w-4" />
         </button>
-        {typeof children === "function" ? children(sessionProps) : children}
+        {children(sessionProps)}
       </>
     );
   }

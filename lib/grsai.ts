@@ -1,9 +1,4 @@
-import { uploadToR2 } from "./r2";
 import { fetchWithProxy } from "./http";
-
-const GRSAI_API_BASE_URL =
-  process.env.GRSAI_API_BASE_URL || "https://api.grsai.com";
-const GRSAI_API_KEY = process.env.GRSAI_API_KEY;
 
 export interface GrsaiDrawRequest {
   model?: "nano-banana-fast" | "nano-banana-pro";
@@ -136,7 +131,7 @@ export class GrsaiClient {
         result.results &&
         result.results.length > 0
       ) {
-        return result.results.map((r: any) => r.url);
+        return result.results.map((r) => r.url);
       }
 
       if (result.status === "failed") {

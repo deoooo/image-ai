@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import nodeFetch from "node-fetch";
+import type { RequestInit as NodeFetchRequestInit } from "node-fetch";
 import { HttpsProxyAgent } from "https-proxy-agent";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -16,7 +17,7 @@ const proxyUrl =
   process.env.https_proxy ||
   process.env.http_proxy;
 
-let options = {};
+let options: NonNullable<Parameters<typeof createClient>[2]> = {};
 
 if (proxyUrl) {
   console.log(`Using proxy for Supabase: ${proxyUrl}`);
@@ -24,8 +25,11 @@ if (proxyUrl) {
 
   options = {
     global: {
-      fetch: (url: any, init: any) => {
-        return nodeFetch(url, { ...init, agent } as any);
+      fetch: async (url, init) => {
+        return nodeFetch(url.toString(), {
+          ...(init as NodeFetchRequestInit | undefined),
+          agent,
+        }) as unknown as Response;
       },
     },
   };

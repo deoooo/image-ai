@@ -83,8 +83,8 @@ DATABASE_URL=postgresql://user:password@host:5432/database
 POSTGRES_URL_NON_POOLING=postgresql://user:password@host:5432/database
 
 # --- 安全 ---
-# Used to sign browser session tokens.
-SESSION_SECRET=replace_with_a_long_random_secret
+# Optional override for the built-in browser session token signing secret.
+# SESSION_SECRET=replace_with_a_long_random_secret
 ```
 
 ### 4. 数据库迁移

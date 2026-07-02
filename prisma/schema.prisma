@@ -15,7 +15,7 @@ model Generation {
   status       String   @default("pending")
   userId       String
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  priceCharged Int      @default(0)
+  priceCharged Float    @default(0)
   chargeStatus String   @default("not_charged")
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -29,7 +29,7 @@ model User {
   id           String       @id @default(cuid())
   username     String       @unique
   passwordHash String
-  balance      Int          @default(0)
+  balance      Float        @default(0)
   generations  Generation[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt

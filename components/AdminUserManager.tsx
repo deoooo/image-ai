@@ -39,6 +39,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
+  const isValidBalance = (value: number) => Number.isFinite(value) && value >= 0;
+
   const createdAtFormatter = useMemo(
     () =>
       new Intl.DateTimeFormat(undefined, {
@@ -93,8 +95,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
     event.preventDefault();
 
     const trimmedUsername = username.trim();
-    if (!trimmedUsername || !password || !Number.isInteger(balance) || balance < 0) {
-      showMessage("Enter a username, password, and non-negative whole-number balance.", "error");
+    if (!trimmedUsername || !password || !isValidBalance(balance)) {
+      showMessage("Enter a username, password, and non-negative balance.", "error");
       return;
     }
 
@@ -140,8 +142,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   };
 
   const updateBalance = async (user: AdminUser) => {
-    if (!Number.isInteger(user.balance) || user.balance < 0) {
-      showMessage("Balance must be a non-negative whole number.", "error");
+    if (!isValidBalance(user.balance)) {
+      showMessage("Balance must be a non-negative number.", "error");
       return;
     }
 
@@ -183,7 +185,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
 
   const isFormDisabled = isCreating || isLoading;
   const canCreateUser =
-    !isFormDisabled && username.trim().length > 0 && password.length > 0 && Number.isInteger(balance) && balance >= 0;
+    !isFormDisabled && username.trim().length > 0 && password.length > 0 && isValidBalance(balance);
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-8 md:py-8">
@@ -246,8 +248,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
               <input
                 type="number"
                 min={0}
-                step={1}
-                inputMode="numeric"
+                step={0.001}
+                inputMode="decimal"
                 value={balance}
                 onChange={(event) => setBalance(Number(event.target.value))}
                 className="h-11 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900/10"
@@ -335,8 +337,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
                           <input
                             type="number"
                             min={0}
-                            step={1}
-                            inputMode="numeric"
+                            step={0.001}
+                            inputMode="decimal"
                             value={user.balance}
                             onChange={(event) => {
                               const nextBalance = Number(event.target.value);

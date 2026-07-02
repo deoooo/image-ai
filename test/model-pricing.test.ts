@@ -8,8 +8,12 @@ import {
 
 describe("model pricing", () => {
   test("returns configured prices for supported models", () => {
-    expect(getModelPrice("nano-banana-fast")).toBe(MODEL_PRICES["nano-banana-fast"]);
-    expect(getModelPrice("nano-banana-pro")).toBe(MODEL_PRICES["nano-banana-pro"]);
+    expect(getModelPrice("nano-banana-fast")).toBe(0.08);
+    expect(getModelPrice("nano-banana-pro")).toBe(0.25);
+    expect(MODEL_PRICES).toEqual({
+      "nano-banana-fast": 0.08,
+      "nano-banana-pro": 0.25,
+    });
   });
 
   test("rejects unknown models", () => {
@@ -19,8 +23,8 @@ describe("model pricing", () => {
 
   test("lists model prices for the UI", () => {
     expect(listModelPrices()).toEqual([
-      { model: "nano-banana-fast", price: MODEL_PRICES["nano-banana-fast"] },
-      { model: "nano-banana-pro", price: MODEL_PRICES["nano-banana-pro"] },
+      { model: "nano-banana-fast", price: 0.08 },
+      { model: "nano-banana-pro", price: 0.25 },
     ]);
   });
 });

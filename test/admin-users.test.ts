@@ -90,7 +90,7 @@ describe("admin users API", () => {
     prismaMock.user.create.mockResolvedValueOnce({
       id: "user_3",
       username: "alice",
-      balance: 12,
+      balance: 12.345,
       createdAt: new Date("2026-07-02T12:00:00.000Z"),
     });
 
@@ -101,7 +101,7 @@ describe("admin users API", () => {
         body: JSON.stringify({
           username: "  alice  ",
           password: "secret123",
-          balance: 12,
+          balance: 12.345,
         }),
       })
     );
@@ -115,14 +115,14 @@ describe("admin users API", () => {
       data: {
         username: "alice",
         passwordHash: "hashed-secret",
-        balance: 12,
+        balance: 12.345,
       },
       select: { id: true, username: true, balance: true, createdAt: true },
     });
     expect(body.user).toEqual({
       id: "user_3",
       username: "alice",
-      balance: 12,
+      balance: 12.345,
       createdAt: "2026-07-02T12:00:00.000Z",
     });
   });
@@ -207,7 +207,7 @@ describe("admin users API", () => {
     prismaMock.user.update.mockResolvedValueOnce({
       id: "user_1",
       username: "alice",
-      balance: 27,
+      balance: 27.125,
       createdAt: new Date("2026-07-01T12:00:00.000Z"),
     });
 
@@ -215,7 +215,7 @@ describe("admin users API", () => {
       new Request("http://localhost/api/admin/users/user_1", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ balance: 27 }),
+        body: JSON.stringify({ balance: 27.125 }),
       }),
       { params: Promise.resolve({ id: "user_1" }) }
     );
@@ -226,13 +226,13 @@ describe("admin users API", () => {
     expect(response.status).toBe(200);
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: "user_1" },
-      data: { balance: 27 },
+      data: { balance: 27.125 },
       select: { id: true, username: true, balance: true, createdAt: true },
     });
     expect(body.user).toEqual({
       id: "user_1",
       username: "alice",
-      balance: 27,
+      balance: 27.125,
       createdAt: "2026-07-01T12:00:00.000Z",
     });
   });
@@ -265,7 +265,7 @@ describe("admin users API", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: "Balance must be a non-negative integer",
+      error: "Balance must be a non-negative number",
     });
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });

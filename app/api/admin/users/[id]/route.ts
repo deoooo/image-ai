@@ -10,6 +10,10 @@ function hasPrismaErrorCode(error: unknown, code: string): error is PrismaErrorW
   return typeof error === "object" && error !== null && "code" in error && error.code === code;
 }
 
+function isValidBalance(balance: unknown): balance is number {
+  return typeof balance === "number" && Number.isFinite(balance) && balance >= 0;
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -19,9 +23,9 @@ export async function PATCH(
     const { id } = await params;
     const { balance } = await req.json();
 
-    if (!Number.isInteger(balance) || balance < 0) {
+    if (!isValidBalance(balance)) {
       return NextResponse.json(
-        { error: "Balance must be a non-negative integer" },
+        { error: "Balance must be a non-negative number" },
         { status: 400 }
       );
     }

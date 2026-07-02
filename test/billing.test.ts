@@ -51,9 +51,9 @@ describe("billing", () => {
     prismaMock.user.updateMany.mockResolvedValueOnce({ count: 1 });
     prismaMock.generation.create.mockResolvedValueOnce({
       id: "g1",
-      priceCharged: 3,
+      priceCharged: 0.25,
     });
-    prismaMock.user.findUnique.mockResolvedValueOnce({ balance: 7 });
+    prismaMock.user.findUnique.mockResolvedValueOnce({ balance: 9.75 });
 
     const result = await chargeForGeneration({
       userId: "u1",
@@ -62,8 +62,8 @@ describe("billing", () => {
     });
 
     expect(prismaMock.user.updateMany).toHaveBeenCalledWith({
-      where: { id: "u1", balance: { gte: 3 } },
-      data: { balance: { decrement: 3 } },
+      where: { id: "u1", balance: { gte: 0.25 } },
+      data: { balance: { decrement: 0.25 } },
     });
     expect(prismaMock.generation.create).toHaveBeenCalledWith({
       data: {
@@ -71,18 +71,18 @@ describe("billing", () => {
         prompt: "prompt",
         model: "nano-banana-pro",
         status: "pending",
-        priceCharged: 3,
+        priceCharged: 0.25,
         chargeStatus: "charged",
       },
     });
-    expect(result).toEqual({ generationId: "g1", priceCharged: 3, balance: 7 });
+    expect(result).toEqual({ generationId: "g1", priceCharged: 0.25, balance: 9.75 });
   });
 
   test("refunds a charged generation once", async () => {
     prismaMock.generation.findUnique.mockResolvedValueOnce({
       id: "g1",
       userId: "u1",
-      priceCharged: 3,
+      priceCharged: 0.25,
       chargeStatus: "charged",
     });
     prismaMock.generation.updateMany.mockResolvedValueOnce({ count: 1 });
@@ -96,7 +96,7 @@ describe("billing", () => {
     });
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: "u1" },
-      data: { balance: { increment: 3 } },
+      data: { balance: { increment: 0.25 } },
       select: { balance: true },
     });
     expect(result).toEqual({ refunded: true, balance: 10 });
@@ -106,7 +106,7 @@ describe("billing", () => {
     prismaMock.generation.findUnique.mockResolvedValueOnce({
       id: "g1",
       userId: "u1",
-      priceCharged: 3,
+      priceCharged: 0.25,
       chargeStatus: "refunded",
     });
 

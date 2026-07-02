@@ -1,8 +1,8 @@
 import type { GenerationModel } from "@/types";
 
 export const MODEL_PRICES: Record<GenerationModel, number> = {
-  "nano-banana-fast": 1,
-  "nano-banana-pro": 3,
+  "nano-banana-fast": 0.08,
+  "nano-banana-pro": 0.25,
 };
 
 export function isSupportedModel(model: string): model is GenerationModel {

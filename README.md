@@ -122,6 +122,9 @@ Each generation charges the current model's code-defined price from the user's
 balance. If the balance is insufficient, generation is rejected. If a charged
 generation fails, the charge is refunded once.
 
+- `nano-banana-pro`: 0.25 RMB
+- `nano-banana-fast`: 0.08 RMB
+
 1. **登录**: 使用管理员账号或普通用户账号登录。
 2. **生成图片**:
    - 在输入框中输入描述性的提示词（Prompt）。

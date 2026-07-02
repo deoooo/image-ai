@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useCallback, useEffect, useState } from "react";
-import { Lock, LogOut } from "lucide-react";
+import { Lock } from "lucide-react";
 import type { AuthenticatedUser, ModelPrice } from "@/types";
 
 interface AuthGateProps {
@@ -137,20 +137,7 @@ export function AuthGate({ children }: AuthGateProps) {
       logout,
     };
 
-    return (
-      <>
-        <button
-          type="button"
-          onClick={logout}
-          className="fixed right-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 shadow-sm hover:bg-gray-50"
-          aria-label="Log out"
-          title="Log out"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
-        {children(sessionProps)}
-      </>
-    );
+    return <>{children(sessionProps)}</>;
   }
 
   return (

@@ -15,7 +15,7 @@ import {
   ImageSize,
   ModelPrice,
 } from "@/types";
-import { Sparkles } from "lucide-react";
+import { LogOut, Sparkles } from "lucide-react";
 
 type RegularUser = Extract<AuthenticatedUser, { role: "user" }>;
 
@@ -24,6 +24,7 @@ interface RegularUserHomeProps {
   user: RegularUser;
   modelPrices: ModelPrice[];
   refreshSession: () => Promise<void>;
+  logout: () => void;
 }
 
 function RegularUserHome({
@@ -31,6 +32,7 @@ function RegularUserHome({
   user,
   modelPrices,
   refreshSession,
+  logout,
 }: RegularUserHomeProps) {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -292,15 +294,30 @@ function RegularUserHome({
 
   return (
     <main className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-      <header className="flex items-center gap-3 pb-6 border-b border-gray-200">
-        <div className="p-2 bg-black rounded-lg">
-          <Sparkles className="w-6 h-6 text-white" />
+      <header className="flex flex-col gap-4 border-b border-gray-200 pb-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-black rounded-lg">
+            <Sparkles className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
+            <p className="text-sm text-gray-500">
+              Balance: <span className="font-medium text-gray-900">{user.balance}</span>
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
-          <p className="text-sm text-gray-500">
-            Balance: <span className="font-medium text-gray-900">{user.balance}</span>
-          </p>
+        <div className="flex items-center gap-3">
+          <span className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+            User: <span className="font-medium text-gray-900">{user.username}</span>
+          </span>
+          <button
+            type="button"
+            onClick={logout}
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+          >
+            <LogOut className="h-4 w-4" />
+            Log out
+          </button>
         </div>
       </header>
 
@@ -356,9 +373,9 @@ function RegularUserHome({
 export default function Home() {
   return (
     <AuthGate>
-      {({ token, user, modelPrices, refreshSession }) => {
+      {({ token, user, modelPrices, refreshSession, logout }) => {
         if (user.role === "admin") {
-          return <AdminUserManager token={token} />;
+          return <AdminUserManager token={token} onLogout={logout} />;
         }
 
         return (
@@ -368,6 +385,7 @@ export default function Home() {
             user={user}
             modelPrices={modelPrices}
             refreshSession={refreshSession}
+            logout={logout}
           />
         );
       }}

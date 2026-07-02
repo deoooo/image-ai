@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Plus, RefreshCw, Save } from "lucide-react";
+import { LogOut, Plus, RefreshCw, Save } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -23,7 +23,12 @@ async function readApiError(response: Response, fallback: string) {
   return fallback;
 }
 
-export function AdminUserManager({ token }: { token: string }) {
+interface AdminUserManagerProps {
+  token: string;
+  onLogout: () => void;
+}
+
+export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -183,10 +188,23 @@ export function AdminUserManager({ token }: { token: string }) {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-6 text-gray-900 md:px-8 md:py-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="border-b border-gray-200 pb-4">
+        <header className="flex flex-col gap-4 border-b border-gray-200 pb-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight">Admin user manager</h1>
             <p className="text-sm text-gray-500">Create accounts and adjust balances.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
+              Admin: <span className="font-medium text-gray-900">lynn</span>
+            </span>
+            <button
+              type="button"
+              onClick={onLogout}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50"
+            >
+              <LogOut className="h-4 w-4" />
+              Log out
+            </button>
           </div>
         </header>
 

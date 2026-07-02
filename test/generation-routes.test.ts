@@ -10,10 +10,6 @@ const apiAuthMock = vi.hoisted(() => ({
   requireUser: vi.fn(),
 }));
 
-const authMock = vi.hoisted(() => ({
-  validateAccessKey: vi.fn(),
-}));
-
 const billingMock = vi.hoisted(() => ({
   BillingError: class extends Error {
     constructor(message: string, public status = 400) {
@@ -37,16 +33,6 @@ const grsaiMock = vi.hoisted(() => ({
   getResult: vi.fn(),
 }));
 
-const supabaseMock = vi.hoisted(() => ({
-  insert: vi.fn(),
-  update: vi.fn(),
-  eq: vi.fn(),
-  select: vi.fn(),
-  order: vi.fn(),
-  limit: vi.fn(),
-  from: vi.fn(),
-}));
-
 const uploadMock = vi.hoisted(() => ({
   handleUpload: vi.fn(),
 }));
@@ -63,10 +49,6 @@ const httpMock = vi.hoisted(() => ({
 vi.mock("@/lib/api-auth", () => ({
   ApiAuthError: apiAuthMock.ApiAuthError,
   requireUser: apiAuthMock.requireUser,
-}));
-
-vi.mock("@/lib/auth", () => ({
-  validateAccessKey: authMock.validateAccessKey,
 }));
 
 vi.mock("@/lib/billing", () => ({
@@ -99,12 +81,6 @@ vi.mock("@/lib/http", () => ({
   fetchWithProxy: httpMock.fetchWithProxy,
 }));
 
-vi.mock("@/lib/supabase", () => ({
-  supabaseAdmin: {
-    from: supabaseMock.from,
-  },
-}));
-
 import { POST as generatePost } from "@/app/api/generate/route";
 import { POST as statusPost } from "@/app/api/generate/status/route";
 import { GET as historyGet } from "@/app/api/history/route";
@@ -116,10 +92,20 @@ function createUserRequest(url: string, init?: RequestInit): Request {
     ...init,
     headers: {
       authorization: "Bearer session-token",
-      "x-access-key": "legacy-key",
       ...(init?.headers || {}),
     },
   });
+}
+
+async function readNdjson(
+  response: Response
+): Promise<Array<Record<string, unknown>>> {
+  const body = await response.text();
+  return body
+    .trim()
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
 describe("generation-related API routes", () => {
@@ -131,7 +117,6 @@ describe("generation-related API routes", () => {
       userId: "user_1",
       username: "alice",
     });
-    authMock.validateAccessKey.mockReturnValue(true);
     billingMock.chargeForGeneration.mockResolvedValue({
       generationId: "gen_1",
       priceCharged: 3,
@@ -141,17 +126,6 @@ describe("generation-related API routes", () => {
       refunded: true,
       balance: 10,
     });
-    supabaseMock.insert.mockResolvedValue({ error: null });
-    supabaseMock.update.mockReturnValue({ eq: supabaseMock.eq });
-    supabaseMock.eq.mockResolvedValue({ error: null });
-    supabaseMock.select.mockReturnValue({ eq: supabaseMock.eq, order: supabaseMock.order });
-    supabaseMock.order.mockReturnValue({ limit: supabaseMock.limit });
-    supabaseMock.limit.mockResolvedValue({ data: [], error: null });
-    supabaseMock.from.mockImplementation(() => ({
-      insert: supabaseMock.insert,
-      update: supabaseMock.update,
-      select: supabaseMock.select,
-    }));
     prismaMock.generation.findFirst.mockResolvedValue({
       id: "gen_1",
       userId: "user_1",
@@ -183,6 +157,27 @@ describe("generation-related API routes", () => {
     );
   });
 
+  test("generate rejects a legacy access-key-only request", async () => {
+    apiAuthMock.requireUser.mockImplementationOnce(() => {
+      throw new apiAuthMock.ApiAuthError("Unauthorized", 401);
+    });
+
+    const response = await generatePost(
+      new Request("http://localhost/api/generate", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-access-key": "legacy-key",
+        },
+        body: JSON.stringify({ prompt: "paint a red fox" }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Unauthorized" });
+    expect(billingMock.chargeForGeneration).not.toHaveBeenCalled();
+  });
+
   test("generate charges the user, persists the task id, and streams billing metadata", async () => {
     const response = await generatePost(
       createUserRequest("http://localhost/api/generate", {
@@ -192,11 +187,7 @@ describe("generation-related API routes", () => {
       })
     );
 
-    const body = await response.text();
-    const lines = body
-      .trim()
-      .split("\n")
-      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const lines = await readNdjson(response);
     const resultLine = lines.find((line) => line.type === "result");
 
     expect(response.status).toBe(200);
@@ -217,6 +208,33 @@ describe("generation-related API routes", () => {
       status: "pending",
       balance: 7,
       priceCharged: 3,
+    });
+  });
+
+  test("generate does not refund when persistence fails after the provider returns a task id", async () => {
+    prismaMock.generation.update.mockRejectedValueOnce(
+      new Error("database unavailable")
+    );
+
+    const response = await generatePost(
+      createUserRequest("http://localhost/api/generate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: "paint a red fox" }),
+      })
+    );
+
+    const lines = await readNdjson(response);
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.generation.update).toHaveBeenCalledWith({
+      where: { id: "gen_1" },
+      data: { taskId: "task_1", status: "pending" },
+    });
+    expect(billingMock.refundGeneration).not.toHaveBeenCalled();
+    expect(lines.at(-1)).toEqual({
+      type: "error",
+      message: "database unavailable",
     });
   });
 
@@ -251,6 +269,71 @@ describe("generation-related API routes", () => {
       failure_reason: "provider failed",
       balance: 10,
     });
+  });
+
+  test("status returns 404 when the task belongs to a different user", async () => {
+    prismaMock.generation.findFirst.mockResolvedValueOnce(null);
+
+    const response = await statusPost(
+      createUserRequest("http://localhost/api/generate/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId: "task_1" }),
+      })
+    );
+
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "Task not found" });
+    expect(billingMock.refundGeneration).not.toHaveBeenCalled();
+  });
+
+  test("status delegates repeated failed polling to idempotent refunds", async () => {
+    grsaiMock.getResult.mockResolvedValue({
+      id: "task_1",
+      status: "failed",
+      progress: 100,
+      results: null,
+      failure_reason: "provider failed",
+    });
+    billingMock.refundGeneration
+      .mockResolvedValueOnce({ refunded: true, balance: 10 })
+      .mockResolvedValueOnce({ refunded: false });
+
+    const first = await statusPost(
+      createUserRequest("http://localhost/api/generate/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId: "task_1" }),
+      })
+    );
+    const second = await statusPost(
+      createUserRequest("http://localhost/api/generate/status", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId: "task_1" }),
+      })
+    );
+
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      id: "task_1",
+      status: "failed",
+      progress: 100,
+      results: null,
+      failure_reason: "provider failed",
+      balance: 10,
+    });
+    expect(second.status).toBe(200);
+    expect(await second.json()).toEqual({
+      id: "task_1",
+      status: "failed",
+      progress: 100,
+      results: null,
+      failure_reason: "provider failed",
+      balance: undefined,
+    });
+    expect(billingMock.refundGeneration).toHaveBeenNthCalledWith(1, "gen_1");
+    expect(billingMock.refundGeneration).toHaveBeenNthCalledWith(2, "gen_1");
   });
 
   test("status rewrites successful results to the R2 url and persists it", async () => {
@@ -331,11 +414,18 @@ describe("generation-related API routes", () => {
     ]);
   });
 
-  test("upload uses bearer auth before delegating to the Vercel blob helper", async () => {
+  test("upload uses bearer auth and scopes the pathname before delegating to Vercel Blob", async () => {
     const request = createUserRequest("http://localhost/api/upload", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ type: "blob.generate-client-token" } satisfies Partial<HandleUploadBody>),
+      body: JSON.stringify({
+        type: "blob.generate-client-token",
+        payload: {
+          pathname: "/gallery/../shots/flower.png",
+          clientPayload: null,
+          multipart: false,
+        },
+      } satisfies Partial<HandleUploadBody>),
     });
 
     const response = await uploadPost(request);
@@ -345,26 +435,68 @@ describe("generation-related API routes", () => {
     expect(uploadMock.handleUpload).toHaveBeenCalledTimes(1);
 
     const args = uploadMock.handleUpload.mock.calls[0]?.[0] as {
-      onBeforeGenerateToken: () => Promise<{
+      body: { type: string; payload: { pathname: string } };
+      onBeforeGenerateToken: (
+        pathname: string,
+        clientPayload: string | null,
+        multipart: boolean
+      ) => Promise<{
         allowedContentTypes: string[];
         tokenPayload: string;
       }>;
     };
-    const tokenConfig = await args.onBeforeGenerateToken();
+
+    expect(args.body.payload.pathname).toBe(
+      "users/user_1/gallery/shots/flower.png"
+    );
+
+    const tokenConfig = await args.onBeforeGenerateToken(
+      args.body.payload.pathname,
+      null,
+      false
+    );
 
     expect(tokenConfig).toEqual({
       allowedContentTypes: ["image/jpeg", "image/png", "image/gif", "image/webp"],
-      tokenPayload: JSON.stringify({}),
+      tokenPayload: JSON.stringify({ userId: "user_1" }),
     });
   });
 
-  test("presigned upload requires a user session and returns the R2 URLs", async () => {
+  test("upload rejects a legacy access-key-only request", async () => {
+    apiAuthMock.requireUser.mockImplementationOnce(() => {
+      throw new apiAuthMock.ApiAuthError("Unauthorized", 401);
+    });
+
+    const response = await uploadPost(
+      new Request("http://localhost/api/upload", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-access-key": "legacy-key",
+        },
+        body: JSON.stringify({
+          type: "blob.generate-client-token",
+          payload: {
+            pathname: "flower.png",
+            clientPayload: null,
+            multipart: false,
+          },
+        }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ error: "Unauthorized" });
+    expect(uploadMock.handleUpload).not.toHaveBeenCalled();
+  });
+
+  test("presigned upload scopes keys under the authenticated user prefix", async () => {
     const response = await presignedPost(
       createUserRequest("http://localhost/api/upload/presigned", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          filename: "uploads/example.png",
+          filename: "/users/other-user/../uploads/example.png",
           contentType: "image/png",
         }),
       })
@@ -373,7 +505,7 @@ describe("generation-related API routes", () => {
     expect(response.status).toBe(200);
     expect(apiAuthMock.requireUser).toHaveBeenCalledTimes(1);
     expect(r2Mock.getPresignedUrl).toHaveBeenCalledWith(
-      "uploads/example.png",
+      "users/user_1/uploads/example.png",
       "image/png"
     );
     expect(await response.json()).toEqual({

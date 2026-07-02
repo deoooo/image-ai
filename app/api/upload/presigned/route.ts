@@ -11,9 +11,28 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function normalizeUserScopedPath(pathname: string, userId: string): string {
+  const cleanedSegments = pathname
+    .replace(/\\/g, "/")
+    .split("/")
+    .filter(Boolean)
+    .filter((segment) => segment !== "." && segment !== "..");
+
+  const relativeSegments =
+    cleanedSegments[0] === "users"
+      ? cleanedSegments.slice(Math.min(cleanedSegments.length, 2))
+      : cleanedSegments;
+
+  if (relativeSegments.length === 0) {
+    throw new Error("Filename is required");
+  }
+
+  return `users/${userId}/${relativeSegments.join("/")}`;
+}
+
 export async function POST(req: Request) {
   try {
-    requireUser(req);
+    const session = requireUser(req);
 
     const body = (await req.json()) as PresignedUploadRequestBody;
     const filename = typeof body.filename === "string" ? body.filename : null;
@@ -27,7 +46,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const { uploadUrl, publicUrl } = await getPresignedUrl(filename, contentType);
+    const scopedFilename = normalizeUserScopedPath(filename, session.userId);
+    const { uploadUrl, publicUrl } = await getPresignedUrl(
+      scopedFilename,
+      contentType
+    );
     return NextResponse.json({ uploadUrl, publicUrl });
   } catch (error) {
     if (error instanceof ApiAuthError) {

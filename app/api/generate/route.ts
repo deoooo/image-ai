@@ -54,6 +54,7 @@ export async function POST(req: Request) {
         const send = (data: unknown) => {
           controller.enqueue(encoder.encode(`${JSON.stringify(data)}\n`));
         };
+        let acceptedTaskId: string | null = null;
 
         try {
           const client = new GrsaiClient();
@@ -85,6 +86,7 @@ export async function POST(req: Request) {
                 imageSize: imageSize as "1K" | "2K" | "4K",
                 urls: inputImageUrls,
               });
+              acceptedTaskId = taskId;
               break;
             } catch (error) {
               console.error(`Attempt ${attempts} failed:`, error);
@@ -110,10 +112,22 @@ export async function POST(req: Request) {
             throw new Error("Failed to obtain Task ID");
           }
 
-          await prisma.generation.update({
-            where: { id: charge.generationId },
-            data: { taskId, status: "pending" },
-          });
+          try {
+            await prisma.generation.update({
+              where: { id: charge.generationId },
+              data: { taskId, status: "pending" },
+            });
+          } catch (error) {
+            console.error(
+              "Provider accepted generation task but persistence failed:",
+              {
+                generationId: charge.generationId,
+                taskId,
+                error,
+              }
+            );
+            throw error;
+          }
 
           send({ type: "log", message: "Task started successfully." });
           send({
@@ -129,8 +143,13 @@ export async function POST(req: Request) {
         } catch (error) {
           console.error("Stream processing error:", error);
 
-          if (generationId) {
+          if (generationId && !acceptedTaskId) {
             await refundGeneration(generationId);
+          } else if (generationId && acceptedTaskId) {
+            console.error("Skipping refund because provider task is already in flight:", {
+              generationId,
+              taskId: acceptedTaskId,
+            });
           }
 
           send({

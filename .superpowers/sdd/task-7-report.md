@@ -25,3 +25,10 @@
 ## Concerns
 
 - `eslint` emitted the existing `baseline-browser-mapping` staleness warning but exited successfully; it does not come from these route changes.
+
+## Review Fix Evidence
+
+- Tightened the `POST /api/generate` refund boundary so the stream refund path only runs before a provider `taskId` exists. Once `client.draw()` returns a `taskId`, persistence failures are surfaced as stream errors and logged without refunding a live provider job.
+- Scoped presigned upload keys to `users/<userId>/...` by sanitizing the requested filename/path before calling `getPresignedUrl`.
+- Scoped Vercel Blob upload pathnames to `users/<userId>/...` before delegating to `handleUpload`, and token generation now includes `tokenPayload: {"userId":"..."}`.
+- Expanded `test/generation-routes.test.ts` to cover legacy access-key rejection, task owner mismatch returning `404`, repeated failed status polling delegating to idempotent refunds, post-`taskId` generate failures not refunding, and upload key/path scoping.

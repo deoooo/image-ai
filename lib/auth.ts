@@ -59,23 +59,6 @@ export function verifyAdminCredentials(username: string, password: string): bool
   return username === ADMIN_USERNAME && password === ADMIN_PASSWORD;
 }
 
-export function validateAccessKey(key: string | null): boolean {
-  if (!key) {
-    return false;
-  }
-
-  const validKeys = (process.env.ACCESS_KEYS || "")
-    .split(",")
-    .map((value) => value.trim())
-    .filter(Boolean);
-
-  if (validKeys.length === 0) {
-    return false;
-  }
-
-  return validKeys.includes(key);
-}
-
 export function createSessionToken(session: Session): string {
   const payload = base64UrlEncode(JSON.stringify(session));
   return `${payload}.${sign(payload)}`;

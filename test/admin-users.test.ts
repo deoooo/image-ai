@@ -147,6 +147,25 @@ describe("admin users API", () => {
     expect(await response.json()).toEqual({ error: "Username already exists" });
   });
 
+  test("rejects the reserved admin username for regular users", async () => {
+    const response = await POST(
+      new Request("http://localhost/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          username: "  LyNn  ",
+          password: "secret123",
+          balance: 12,
+        }),
+      })
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "Username is reserved" });
+    expect(hashPasswordMock.hashPassword).not.toHaveBeenCalled();
+    expect(prismaMock.user.create).not.toHaveBeenCalled();
+  });
+
   test("rejects non-admin access with the auth error status", async () => {
     apiAuthMock.requireAdmin.mockImplementationOnce(() => {
       throw new apiAuthMock.ApiAuthError("Forbidden", 403);

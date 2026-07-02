@@ -54,7 +54,7 @@ export async function POST(req: Request) {
         const send = (data: unknown) => {
           controller.enqueue(encoder.encode(`${JSON.stringify(data)}\n`));
         };
-        let acceptedTaskId: string | null = null;
+        let taskPersisted = false;
 
         try {
           const client = new GrsaiClient();
@@ -86,7 +86,6 @@ export async function POST(req: Request) {
                 imageSize: imageSize as "1K" | "2K" | "4K",
                 urls: inputImageUrls,
               });
-              acceptedTaskId = taskId;
               break;
             } catch (error) {
               console.error(`Attempt ${attempts} failed:`, error);
@@ -117,6 +116,7 @@ export async function POST(req: Request) {
               where: { id: charge.generationId },
               data: { taskId, status: "pending" },
             });
+            taskPersisted = true;
           } catch (error) {
             console.error(
               "Provider accepted generation task but persistence failed:",
@@ -143,13 +143,8 @@ export async function POST(req: Request) {
         } catch (error) {
           console.error("Stream processing error:", error);
 
-          if (generationId && !acceptedTaskId) {
+          if (generationId && !taskPersisted) {
             await refundGeneration(generationId);
-          } else if (generationId && acceptedTaskId) {
-            console.error("Skipping refund because provider task is already in flight:", {
-              generationId,
-              taskId: acceptedTaskId,
-            });
           }
 
           send({

@@ -33,8 +33,14 @@ export async function POST(req: Request) {
     requireAdmin(req);
     const { username, password, balance } = await req.json();
 
-    if (typeof username !== "string" || username.trim().length < 1) {
+    const normalizedUsername = typeof username === "string" ? username.trim() : "";
+
+    if (normalizedUsername.length < 1) {
       return NextResponse.json({ error: "Username is required" }, { status: 400 });
+    }
+
+    if (normalizedUsername.toLowerCase() === "lynn") {
+      return NextResponse.json({ error: "Username is reserved" }, { status: 409 });
     }
 
     if (typeof password !== "string" || password.length < 1) {
@@ -50,7 +56,7 @@ export async function POST(req: Request) {
 
     const user = await prisma.user.create({
       data: {
-        username: username.trim(),
+        username: normalizedUsername,
         passwordHash: await hashPassword(password),
         balance,
       },

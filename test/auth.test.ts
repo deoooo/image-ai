@@ -3,22 +3,12 @@ import {
   createSessionToken,
   verifyAdminCredentials,
   verifySessionToken,
-  validateAccessKey,
   type Session,
 } from "@/lib/auth";
 
 describe("auth sessions", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
-  });
-
-  test("keeps the legacy access-key compatibility export", () => {
-    vi.stubEnv("ACCESS_KEYS", "alpha, beta");
-
-    expect(validateAccessKey("alpha")).toBe(true);
-    expect(validateAccessKey("beta")).toBe(true);
-    expect(validateAccessKey("wrong")).toBe(false);
-    expect(validateAccessKey(null)).toBe(false);
   });
 
   test("accepts the fixed temporary admin credential", () => {

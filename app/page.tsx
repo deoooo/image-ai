@@ -159,27 +159,30 @@ function RegularUserHome({
         const lines = chunk.split("\n").filter((line) => line.trim() !== "");
 
         for (const line of lines) {
-          try {
-            const data = JSON.parse(line) as {
-              type?: string;
-              message?: string;
-              taskId?: string;
-              balance?: number;
-            };
+          let data: {
+            type?: string;
+            message?: string;
+            taskId?: string;
+            balance?: number;
+          };
 
-            if (data.type === "log" && data.message) {
-              console.log("Log:", data.message);
-              setStatusMessage(data.message);
-            } else if (data.type === "error") {
-              throw new Error(data.message || "Generation failed");
-            } else if (data.type === "result" && data.taskId) {
-              taskId = data.taskId;
-              if (typeof data.balance === "number") {
-                shouldRefreshSession = true;
-              }
-            }
+          try {
+            data = JSON.parse(line) as typeof data;
           } catch (error) {
             console.error("Error parsing chunk:", error);
+            continue;
+          }
+
+          if (data.type === "log" && data.message) {
+            console.log("Log:", data.message);
+            setStatusMessage(data.message);
+          } else if (data.type === "error") {
+            throw new Error(data.message || "Generation failed");
+          } else if (data.type === "result" && data.taskId) {
+            taskId = data.taskId;
+            if (typeof data.balance === "number") {
+              shouldRefreshSession = true;
+            }
           }
         }
       }

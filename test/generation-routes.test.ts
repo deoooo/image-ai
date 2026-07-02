@@ -211,7 +211,7 @@ describe("generation-related API routes", () => {
     });
   });
 
-  test("generate does not refund when persistence fails after the provider returns a task id", async () => {
+  test("generate refunds when persistence fails after the provider returns a task id", async () => {
     prismaMock.generation.update.mockRejectedValueOnce(
       new Error("database unavailable")
     );
@@ -231,7 +231,7 @@ describe("generation-related API routes", () => {
       where: { id: "gen_1" },
       data: { taskId: "task_1", status: "pending" },
     });
-    expect(billingMock.refundGeneration).not.toHaveBeenCalled();
+    expect(billingMock.refundGeneration).toHaveBeenCalledWith("gen_1");
     expect(lines.at(-1)).toEqual({
       type: "error",
       message: "database unavailable",

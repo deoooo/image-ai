@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
-import { createSessionToken, verifyAdminCredentials } from "@/lib/auth";
+import { createSessionToken } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
 import { prisma } from "@/lib/prisma";
+
+const ADMIN_USERNAME = "lynn";
+const ADMIN_PASSWORD = "lynn2026";
 
 export async function POST(req: Request) {
   try {
@@ -14,7 +17,14 @@ export async function POST(req: Request) {
       );
     }
 
-    if (verifyAdminCredentials(username, password)) {
+    if (username === ADMIN_USERNAME) {
+      if (password !== ADMIN_PASSWORD) {
+        return NextResponse.json(
+          { error: "Invalid username or password" },
+          { status: 401 }
+        );
+      }
+
       const token = createSessionToken({ role: "admin", username });
       return NextResponse.json({ token, user: { role: "admin", username } });
     }

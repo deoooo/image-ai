@@ -14,11 +14,16 @@ function isPostgresUrl(value: string | undefined): value is string {
 }
 
 export function resolveDatabaseUrl(env: DatabaseEnv = process.env): string {
-  const candidates = [env.POSTGRES_URL_NON_POOLING, env.DATABASE_URL];
+  const candidates = [
+    env.POSTGRES_URL_NON_POOLING,
+    env.POSTGRES_PRISMA_URL,
+    env.DATABASE_URL,
+    env.POSTGRES_URL,
+  ];
   const connectionString = candidates.find(isPostgresUrl);
 
   if (!connectionString) {
-    throw new Error("A valid POSTGRES_URL_NON_POOLING or DATABASE_URL PostgreSQL connection string is required");
+    throw new Error("A valid PostgreSQL connection string is required");
   }
 
   return connectionString;

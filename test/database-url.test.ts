@@ -11,12 +11,22 @@ describe("database URL resolution", () => {
     ).toBe("postgresql://user:password@db.example.com:5432/app");
   });
 
+  test("uses POSTGRES_URL when earlier database URL candidates are invalid", () => {
+    expect(
+      resolveDatabaseUrl({
+        POSTGRES_URL_NON_POOLING: "base",
+        DATABASE_URL: "",
+        POSTGRES_URL: "postgresql://user:password@db.example.com:5432/app",
+      })
+    ).toBe("postgresql://user:password@db.example.com:5432/app");
+  });
+
   test("throws a clear error when no valid PostgreSQL URL is configured", () => {
     expect(() =>
       resolveDatabaseUrl({
         POSTGRES_URL_NON_POOLING: "base",
         DATABASE_URL: "not-a-url",
       })
-    ).toThrow("A valid POSTGRES_URL_NON_POOLING or DATABASE_URL PostgreSQL connection string is required");
+    ).toThrow("A valid PostgreSQL connection string is required");
   });
 });

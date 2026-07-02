@@ -30,7 +30,7 @@ export function AdminUserManager({ token }: { token: string }) {
   const [balance, setBalance] = useState(0);
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState<"idle" | "success" | "error">("idle");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
@@ -289,7 +289,13 @@ export function AdminUserManager({ token }: { token: string }) {
                 </tr>
               </thead>
               <tbody>
-                {users.length === 0 ? (
+                {isLoading && users.length === 0 ? (
+                  <tr>
+                    <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={4}>
+                      Loading users...
+                    </td>
+                  </tr>
+                ) : users.length === 0 ? (
                   <tr>
                     <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={4}>
                       No users yet.

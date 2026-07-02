@@ -1,19 +1,160 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { AdminUserManager } from "@/components/AdminUserManager";
+import { AuthGate } from "@/components/AuthGate";
 import { ImageUploader } from "@/components/ImageUploader";
 import { GenerationForm } from "@/components/GenerationForm";
 import { ImageGallery } from "@/components/ImageGallery";
-
 import {
+  AuthenticatedUser,
   GeneratedImage,
   GenerationModel,
   UploadedImage,
   AspectRatio,
   ImageSize,
+  ModelPrice,
 } from "@/types";
 import { Sparkles } from "lucide-react";
-import { upload } from "@vercel/blob/client";
+
+type RegularUser = Extract<AuthenticatedUser, { role: "user" }>;
+
+interface RegularUserHomeProps {
+  token: string;
+  user: RegularUser;
+  modelPrices: ModelPrice[];
+  uploadedImages: UploadedImage[];
+  setUploadedImages: React.Dispatch<React.SetStateAction<UploadedImage[]>>;
+  setHistoryImages: React.Dispatch<React.SetStateAction<GeneratedImage[]>>;
+  allImages: GeneratedImage[];
+  prompt: string;
+  setPrompt: React.Dispatch<React.SetStateAction<string>>;
+  model: GenerationModel;
+  setModel: React.Dispatch<React.SetStateAction<GenerationModel>>;
+  aspectRatio: AspectRatio;
+  setAspectRatio: React.Dispatch<React.SetStateAction<AspectRatio>>;
+  imageSize: ImageSize;
+  setImageSize: React.Dispatch<React.SetStateAction<ImageSize>>;
+  handleGenerate: () => Promise<void>;
+  isGenerating: boolean;
+  generationProgress: number;
+  statusMessage: string;
+}
+
+function RegularUserHome({
+  token,
+  user,
+  modelPrices,
+  uploadedImages,
+  setUploadedImages,
+  setHistoryImages,
+  allImages,
+  prompt,
+  setPrompt,
+  model,
+  setModel,
+  aspectRatio,
+  setAspectRatio,
+  imageSize,
+  setImageSize,
+  handleGenerate,
+  isGenerating,
+  generationProgress,
+  statusMessage,
+}: RegularUserHomeProps) {
+  const modelPrice = modelPrices.find((item) => item.model === model)?.price ?? 0;
+
+  useEffect(() => {
+    let isActive = true;
+
+    const fetchHistory = async () => {
+      try {
+        const res = await fetch("/api/history", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        if (!res.ok) {
+          return;
+        }
+
+        const data = (await res.json()) as GeneratedImage[];
+        if (isActive && Array.isArray(data)) {
+          setHistoryImages(data);
+        }
+      } catch (err) {
+        console.error("Failed to load history", err);
+      }
+    };
+
+    void fetchHistory();
+
+    return () => {
+      isActive = false;
+    };
+  }, [token, setHistoryImages]);
+
+  return (
+    <main className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-8">
+      <header className="flex items-center gap-3 pb-6 border-b border-gray-200">
+        <div className="p-2 bg-black rounded-lg">
+          <Sparkles className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
+          <p className="text-sm text-gray-500">
+            Balance: <span className="font-medium text-gray-900">{user.balance}</span>
+          </p>
+        </div>
+      </header>
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="lg:col-span-4 space-y-8">
+          <section className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold mb-4">Input Images</h2>
+            <ImageUploader images={uploadedImages} onImagesChange={setUploadedImages} />
+          </section>
+
+          <section className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
+            <h2 className="text-lg font-semibold mb-4">Generation Settings</h2>
+            <GenerationForm
+              prompt={prompt}
+              onPromptChange={setPrompt}
+              model={model}
+              onModelChange={setModel}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={setAspectRatio}
+              imageSize={imageSize}
+              onImageSizeChange={setImageSize}
+              onSubmit={() => {
+                void handleGenerate();
+              }}
+              isGenerating={isGenerating}
+              progress={generationProgress}
+              modelPrice={modelPrice}
+              balance={user.balance}
+            />
+            {statusMessage && (
+              <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg flex items-center gap-2 animate-pulse">
+                <Sparkles className="w-4 h-4" />
+                {statusMessage}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="lg:col-span-8">
+          <section>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900">Gallery</h2>
+              <span className="text-sm text-gray-500">{allImages.length} images</span>
+            </div>
+            <ImageGallery images={allImages} />
+          </section>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 export default function Home() {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
@@ -27,31 +168,6 @@ export default function Home() {
   const [generationProgress, setGenerationProgress] = useState<number>(0);
   const [statusMessage, setStatusMessage] = useState<string>("");
 
-  // Fetch history on mount
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const key = localStorage.getItem("image_ai_access_key") || "";
-        if (!key) return;
-
-        const res = await fetch("/api/history", {
-          headers: { "x-access-key": key },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            setHistoryImages(data);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load history", err);
-      }
-    };
-
-    fetchHistory();
-    fetchHistory();
-  }, []); // Only fetch on mount
-
   // Merge generated (new active session) and history (fetched)
   // Ensure we don't show duplicates if history fetch includes recently generated ones
   // But generally, generatedImages will be empty on mount, and historyImages will populate.
@@ -61,13 +177,11 @@ export default function Home() {
     ...historyImages.filter((h) => !generatedImages.some((g) => g.id === h.id)),
   ];
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (token: string, refreshSession: () => Promise<void>) => {
     setIsGenerating(true);
     setGenerationProgress(0);
 
     try {
-      const key = localStorage.getItem("image_ai_access_key") || "";
-
       // Upload images to R2
       setStatusMessage("Uploading input images...");
       const imagePromises = uploadedImages.map(async (img) => {
@@ -78,7 +192,7 @@ export default function Home() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-access-key": key,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
             filename,
@@ -108,7 +222,7 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-access-key": key,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           prompt,
@@ -128,6 +242,7 @@ export default function Home() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let taskId = "";
+      let shouldRefreshSession = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -147,6 +262,9 @@ export default function Home() {
               throw new Error(data.message);
             } else if (data.type === "result") {
               taskId = data.taskId;
+              if (typeof data.balance === "number") {
+                shouldRefreshSession = true;
+              }
             }
           } catch (e) {
             console.error("Error parsing chunk:", e);
@@ -156,6 +274,10 @@ export default function Home() {
 
       if (!taskId) {
         throw new Error("Failed to get Task ID from stream");
+      }
+
+      if (shouldRefreshSession) {
+        await refreshSession();
       }
 
       console.log("Task ID:", taskId);
@@ -170,7 +292,7 @@ export default function Home() {
         // url is undefined (will be set when complete)
       };
 
-      setGeneratedImages([placeholderImage, ...generatedImages]);
+      setGeneratedImages((prev) => [placeholderImage, ...prev]);
 
       // Step 2: Poll for status
       const pollInterval = 2000; // 2 seconds
@@ -188,7 +310,7 @@ export default function Home() {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "x-access-key": key,
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({ taskId }),
         });
@@ -199,6 +321,10 @@ export default function Home() {
 
         const statusData = await statusResponse.json();
         console.log("Status:", statusData);
+
+        if (typeof statusData.balance === "number") {
+          await refreshSession();
+        }
 
         // Update progress in the placeholder
         if (statusData.progress !== undefined) {
@@ -256,62 +382,36 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen p-4 md:p-8 max-w-7xl mx-auto space-y-8">
-      <header className="flex items-center gap-3 pb-6 border-b border-gray-200">
-        <div className="p-2 bg-black rounded-lg">
-          <Sparkles className="w-6 h-6 text-white" />
-        </div>
-        <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
-      </header>
+    <AuthGate>
+      {({ token, user, modelPrices, refreshSession }) => {
+        if (user.role === "admin") {
+          return <AdminUserManager token={token} />;
+        }
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Sidebar - Controls */}
-        <div className="lg:col-span-4 space-y-8">
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h2 className="text-lg font-semibold mb-4">Input Images</h2>
-            <ImageUploader
-              images={uploadedImages}
-              onImagesChange={setUploadedImages}
-            />
-          </section>
-
-          <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-            <h2 className="text-lg font-semibold mb-4">Generation Settings</h2>
-            <GenerationForm
-              prompt={prompt}
-              onPromptChange={setPrompt}
-              model={model}
-              onModelChange={setModel}
-              aspectRatio={aspectRatio}
-              onAspectRatioChange={setAspectRatio}
-              imageSize={imageSize}
-              onImageSizeChange={setImageSize}
-              onSubmit={handleGenerate}
-              isGenerating={isGenerating}
-              progress={generationProgress}
-            />
-            {statusMessage && (
-              <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg flex items-center gap-2 animate-pulse">
-                <Sparkles className="w-4 h-4" />
-                {statusMessage}
-              </div>
-            )}
-          </section>
-        </div>
-
-        {/* Right Content - Gallery */}
-        <div className="lg:col-span-8">
-          <section>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Gallery</h2>
-              <span className="text-sm text-gray-500">
-                {allImages.length} images
-              </span>
-            </div>
-            <ImageGallery images={allImages} />
-          </section>
-        </div>
-      </div>
-    </main>
+        return (
+          <RegularUserHome
+            token={token}
+            user={user}
+            modelPrices={modelPrices}
+            uploadedImages={uploadedImages}
+            setUploadedImages={setUploadedImages}
+            setHistoryImages={setHistoryImages}
+            allImages={allImages}
+            prompt={prompt}
+            setPrompt={setPrompt}
+            model={model}
+            setModel={setModel}
+            aspectRatio={aspectRatio}
+            setAspectRatio={setAspectRatio}
+            imageSize={imageSize}
+            setImageSize={setImageSize}
+            handleGenerate={() => handleGenerate(token, refreshSession)}
+            isGenerating={isGenerating}
+            generationProgress={generationProgress}
+            statusMessage={statusMessage}
+          />
+        );
+      }}
+    </AuthGate>
   );
 }

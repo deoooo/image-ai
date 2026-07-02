@@ -17,6 +17,8 @@ interface GenerationFormProps {
   onSubmit: () => void;
   isGenerating: boolean;
   progress?: number;
+  modelPrice: number;
+  balance?: number;
 }
 
 export function GenerationForm({
@@ -31,7 +33,12 @@ export function GenerationForm({
   onSubmit,
   isGenerating,
   progress = 0,
+  modelPrice,
+  balance,
 }: GenerationFormProps) {
+  const hasInsufficientBalance = balance !== undefined && balance < modelPrice;
+  const isDisabled = isGenerating || !prompt.trim() || hasInsufficientBalance;
+
   return (
     <div className="space-y-6">
       <div className="space-y-4">
@@ -97,12 +104,19 @@ export function GenerationForm({
         />
       </div>
 
+      <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
+        Selected model price: <span className="font-semibold">{modelPrice}</span>
+        {balance !== undefined && (
+          <span className="ml-3 text-gray-500">Balance: {balance}</span>
+        )}
+      </div>
+
       <button
         onClick={onSubmit}
-        disabled={isGenerating || !prompt.trim()}
+        disabled={isDisabled}
         className={cn(
           "w-full py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-medium transition-all",
-          isGenerating || !prompt.trim()
+          isDisabled
             ? "bg-gray-100 text-gray-400 cursor-not-allowed"
             : "bg-gray-900 text-white hover:bg-gray-800 shadow-lg hover:shadow-xl active:scale-[0.98]"
         )}
@@ -110,7 +124,7 @@ export function GenerationForm({
         {isGenerating ? (
           <>
             <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            Generating...
+            {progress > 0 ? `Generating... ${progress}%` : "Generating..."}
           </>
         ) : (
           <>

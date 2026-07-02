@@ -1,82 +1,106 @@
 import { NextResponse } from "next/server";
+import { ApiAuthError, requireUser } from "@/lib/api-auth";
+import {
+  BillingError,
+  chargeForGeneration,
+  refundGeneration,
+} from "@/lib/billing";
 import { GrsaiClient } from "@/lib/grsai";
-import { validateAccessKey } from "@/lib/auth";
-import { uploadToR2 } from "@/lib/r2";
+import { prisma } from "@/lib/prisma";
+
+type GenerateRequestBody = {
+  prompt?: unknown;
+  model?: unknown;
+  images?: unknown;
+  aspectRatio?: unknown;
+  imageSize?: unknown;
+};
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
 
 export async function POST(req: Request) {
-  try {
-    const key = req.headers.get("x-access-key");
-    if (!validateAccessKey(key)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+  let generationId: string | null = null;
 
-    const body = await req.json();
-    const { prompt, model, images, aspectRatio, imageSize } = body;
+  try {
+    const session = requireUser(req);
+    const body = (await req.json()) as GenerateRequestBody;
+    const prompt = typeof body.prompt === "string" ? body.prompt : null;
+    const model =
+      typeof body.model === "string" ? body.model : "nano-banana-pro";
+    const inputImageUrls = Array.isArray(body.images)
+      ? body.images.filter((image): image is string => typeof image === "string")
+      : [];
+    const aspectRatio =
+      typeof body.aspectRatio === "string" ? body.aspectRatio : "auto";
+    const imageSize = typeof body.imageSize === "string" ? body.imageSize : "1K";
 
     if (!prompt) {
-      return NextResponse.json(
-        { error: "Prompt is required" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: "Prompt is required" }, { status: 400 });
     }
 
-    // Create a stream for real-time updates
+    const charge = await chargeForGeneration({
+      userId: session.userId,
+      prompt,
+      model,
+    });
+    generationId = charge.generationId;
+    const drawModel = model as "nano-banana-fast" | "nano-banana-pro";
+
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
-        const send = (data: any) => {
-          controller.enqueue(encoder.encode(JSON.stringify(data) + "\n"));
+        const send = (data: unknown) => {
+          controller.enqueue(encoder.encode(`${JSON.stringify(data)}\n`));
         };
 
         try {
           const client = new GrsaiClient();
 
-          // 1. Use provided image URLs
-          let inputImageUrls: string[] = [];
-          if (images && Array.isArray(images) && images.length > 0) {
+          if (inputImageUrls.length > 0) {
             send({ type: "log", message: "Using uploaded input images..." });
-            inputImageUrls = images;
           }
 
-          // 2. Call Grsai API with Retry Logic
           let taskId: string | null = null;
           let attempts = 0;
           const maxAttempts = 3;
 
           while (attempts < maxAttempts) {
-            attempts++;
+            attempts += 1;
+
             try {
-              if (attempts > 1) {
-                send({
-                  type: "log",
-                  message: `Requesting generation (Attempt ${attempts}/${maxAttempts})...`,
-                });
-              } else {
-                send({ type: "log", message: "Requesting generation..." });
-              }
-
-              taskId = await client.draw({
-                model: (model as any) || "nano-banana-pro",
-                prompt,
-                aspectRatio: aspectRatio || "auto",
-                imageSize: imageSize || "1K",
-                urls: inputImageUrls,
-              });
-
-              // If successful, break the loop
-              break;
-            } catch (err: any) {
-              console.error(`Attempt ${attempts} failed:`, err);
-              if (attempts === maxAttempts) {
-                // Determine if we should throw or just report error
-                throw new Error(
-                  `Failed after ${maxAttempts} attempts: ${err.message}`
-                );
-              }
-              // Wait before retry (exponential backoff or fixed)
               send({
                 type: "log",
-                message: `Generation request failed, retrying in 2s...`,
+                message:
+                  attempts > 1
+                    ? `Requesting generation (Attempt ${attempts}/${maxAttempts})...`
+                    : "Requesting generation...",
+              });
+
+              taskId = await client.draw({
+                model: drawModel,
+                prompt,
+                aspectRatio,
+                imageSize: imageSize as "1K" | "2K" | "4K",
+                urls: inputImageUrls,
+              });
+              break;
+            } catch (error) {
+              console.error(`Attempt ${attempts} failed:`, error);
+
+              if (attempts === maxAttempts) {
+                throw new Error(
+                  `Failed after ${maxAttempts} attempts: ${getErrorMessage(
+                    error,
+                    "Unknown generation error"
+                  )}`
+                );
+              }
+
+              send({
+                type: "log",
+                message: "Generation request failed, retrying in 2s...",
               });
               await new Promise((resolve) => setTimeout(resolve, 2000));
             }
@@ -86,33 +110,32 @@ export async function POST(req: Request) {
             throw new Error("Failed to obtain Task ID");
           }
 
+          await prisma.generation.update({
+            where: { id: charge.generationId },
+            data: { taskId, status: "pending" },
+          });
+
           send({ type: "log", message: "Task started successfully." });
-
-          // 3. Save to Supabase (fire and forget from stream's perspective, or await)
-          // We can await it to ensure DB is consistent before sending final result
-          const { supabaseAdmin } = await import("@/lib/supabase");
-          if (supabaseAdmin) {
-            await supabaseAdmin.from("generations").insert({
-              task_id: taskId,
-              prompt,
-              model,
-              status: "pending",
-            });
-          }
-
-          // 4. Send Result
           send({
             type: "result",
             taskId,
+            generationId: charge.generationId,
             status: "pending",
             prompt,
             model,
+            balance: charge.balance,
+            priceCharged: charge.priceCharged,
           });
-        } catch (error: any) {
+        } catch (error) {
           console.error("Stream processing error:", error);
+
+          if (generationId) {
+            await refundGeneration(generationId);
+          }
+
           send({
             type: "error",
-            message: error.message || "Internal Server Error",
+            message: getErrorMessage(error, "Internal Server Error"),
           });
         } finally {
           controller.close();
@@ -126,10 +149,14 @@ export async function POST(req: Request) {
         "Transfer-Encoding": "chunked",
       },
     });
-  } catch (error: any) {
+  } catch (error) {
+    if (error instanceof ApiAuthError || error instanceof BillingError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+
     console.error("Generation error:", error);
     return NextResponse.json(
-      { error: error.message || "Failed to generate image" },
+      { error: getErrorMessage(error, "Failed to generate image") },
       { status: 500 }
     );
   }

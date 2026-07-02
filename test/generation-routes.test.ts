@@ -414,6 +414,22 @@ describe("generation-related API routes", () => {
     ]);
   });
 
+  test("history returns an empty list for the built-in user without database access", async () => {
+    apiAuthMock.requireUser.mockReturnValueOnce({
+      role: "user",
+      userId: "builtin_deo",
+      username: "deo",
+    });
+
+    const response = await historyGet(
+      createUserRequest("http://localhost/api/history")
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual([]);
+    expect(prismaMock.generation.findMany).not.toHaveBeenCalled();
+  });
+
   test("upload uses bearer auth and scopes the pathname before delegating to Vercel Blob", async () => {
     const request = createUserRequest("http://localhost/api/upload", {
       method: "POST",

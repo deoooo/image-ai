@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireUser } from "@/lib/api-auth";
+import { isBuiltInUserId } from "@/lib/built-in-user";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -7,6 +8,10 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request) {
   try {
     const session = requireUser(req);
+    if (isBuiltInUserId(session.userId)) {
+      return NextResponse.json([]);
+    }
+
     const generations = await prisma.generation.findMany({
       where: {
         userId: session.userId,

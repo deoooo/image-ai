@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthGateShell } from "@/components/AuthGateShell";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -18,9 +17,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={cn(inter.className, "bg-gray-50 min-h-screen")}>
-        <AuthGateShell>{children}</AuthGateShell>
-      </body>
+      <body className={cn(inter.className, "bg-gray-50 min-h-screen")}>{children}</body>
     </html>
   );
 }

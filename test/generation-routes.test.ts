@@ -20,12 +20,11 @@ const billingMock = vi.hoisted(() => ({
   refundGeneration: vi.fn(),
 }));
 
-const prismaMock = vi.hoisted(() => ({
-  generation: {
-    findFirst: vi.fn(),
-    findMany: vi.fn(),
-    update: vi.fn(),
-  },
+const dataMock = vi.hoisted(() => ({
+  attachTaskToGeneration: vi.fn(),
+  findGenerationByTaskIdForUser: vi.fn(),
+  markGenerationSucceeded: vi.fn(),
+  listSucceededGenerations: vi.fn(),
 }));
 
 const grsaiMock = vi.hoisted(() => ({
@@ -57,8 +56,11 @@ vi.mock("@/lib/billing", () => ({
   refundGeneration: billingMock.refundGeneration,
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: prismaMock,
+vi.mock("@/lib/supabase-data", () => ({
+  attachTaskToGeneration: dataMock.attachTaskToGeneration,
+  findGenerationByTaskIdForUser: dataMock.findGenerationByTaskIdForUser,
+  markGenerationSucceeded: dataMock.markGenerationSucceeded,
+  listSucceededGenerations: dataMock.listSucceededGenerations,
 }));
 
 vi.mock("@/lib/grsai", () => ({
@@ -126,13 +128,14 @@ describe("generation-related API routes", () => {
       refunded: true,
       balance: 10,
     });
-    prismaMock.generation.findFirst.mockResolvedValue({
+    dataMock.findGenerationByTaskIdForUser.mockResolvedValue({
       id: "gen_1",
       userId: "user_1",
       taskId: "task_1",
     });
-    prismaMock.generation.findMany.mockResolvedValue([]);
-    prismaMock.generation.update.mockResolvedValue({});
+    dataMock.listSucceededGenerations.mockResolvedValue([]);
+    dataMock.attachTaskToGeneration.mockResolvedValue({});
+    dataMock.markGenerationSucceeded.mockResolvedValue({});
     grsaiMock.draw.mockResolvedValue("task_1");
     grsaiMock.getResult.mockResolvedValue({
       id: "task_1",
@@ -197,10 +200,7 @@ describe("generation-related API routes", () => {
       prompt: "paint a red fox",
       model: "nano-banana-pro",
     });
-    expect(prismaMock.generation.update).toHaveBeenCalledWith({
-      where: { id: "gen_1" },
-      data: { taskId: "task_1", status: "pending" },
-    });
+    expect(dataMock.attachTaskToGeneration).toHaveBeenCalledWith("gen_1", "task_1");
     expect(resultLine).toMatchObject({
       type: "result",
       taskId: "task_1",
@@ -212,7 +212,7 @@ describe("generation-related API routes", () => {
   });
 
   test("generate refunds when persistence fails after the provider returns a task id", async () => {
-    prismaMock.generation.update.mockRejectedValueOnce(
+    dataMock.attachTaskToGeneration.mockRejectedValueOnce(
       new Error("database unavailable")
     );
 
@@ -227,10 +227,7 @@ describe("generation-related API routes", () => {
     const lines = await readNdjson(response);
 
     expect(response.status).toBe(200);
-    expect(prismaMock.generation.update).toHaveBeenCalledWith({
-      where: { id: "gen_1" },
-      data: { taskId: "task_1", status: "pending" },
-    });
+    expect(dataMock.attachTaskToGeneration).toHaveBeenCalledWith("gen_1", "task_1");
     expect(billingMock.refundGeneration).toHaveBeenCalledWith("gen_1");
     expect(lines.at(-1)).toEqual({
       type: "error",
@@ -257,9 +254,10 @@ describe("generation-related API routes", () => {
 
     expect(response.status).toBe(200);
     expect(apiAuthMock.requireUser).toHaveBeenCalledTimes(1);
-    expect(prismaMock.generation.findFirst).toHaveBeenCalledWith({
-      where: { taskId: "task_1", userId: "user_1" },
-    });
+    expect(dataMock.findGenerationByTaskIdForUser).toHaveBeenCalledWith(
+      "task_1",
+      "user_1"
+    );
     expect(billingMock.refundGeneration).toHaveBeenCalledWith("gen_1");
     expect(await response.json()).toEqual({
       id: "task_1",
@@ -272,7 +270,7 @@ describe("generation-related API routes", () => {
   });
 
   test("status returns 404 when the task belongs to a different user", async () => {
-    prismaMock.generation.findFirst.mockResolvedValueOnce(null);
+    dataMock.findGenerationByTaskIdForUser.mockResolvedValueOnce(null);
 
     const response = await statusPost(
       createUserRequest("http://localhost/api/generate/status", {
@@ -361,13 +359,10 @@ describe("generation-related API routes", () => {
       expect.any(Buffer),
       "image/png"
     );
-    expect(prismaMock.generation.update).toHaveBeenCalledWith({
-      where: { id: "gen_1" },
-      data: {
-        status: "succeeded",
-        imageUrl: "https://cdn.example/generated.png",
-      },
-    });
+    expect(dataMock.markGenerationSucceeded).toHaveBeenCalledWith(
+      "gen_1",
+      "https://cdn.example/generated.png"
+    );
     expect(await response.json()).toEqual({
       id: "task_1",
       status: "succeeded",
@@ -377,14 +372,14 @@ describe("generation-related API routes", () => {
   });
 
   test("history returns only the authenticated user's persisted generations", async () => {
-    prismaMock.generation.findMany.mockResolvedValueOnce([
+    dataMock.listSucceededGenerations.mockResolvedValueOnce([
       {
         id: "gen_1",
         taskId: null,
         prompt: "paint a skyline",
         model: "nano-banana-pro",
         imageUrl: "https://cdn.example/image.png",
-        createdAt: new Date("2026-07-02T10:00:00.000Z"),
+        createdAt: "2026-07-02T10:00:00.000Z",
       },
     ]);
 
@@ -394,15 +389,7 @@ describe("generation-related API routes", () => {
 
     expect(response.status).toBe(200);
     expect(apiAuthMock.requireUser).toHaveBeenCalledTimes(1);
-    expect(prismaMock.generation.findMany).toHaveBeenCalledWith({
-      where: {
-        userId: "user_1",
-        status: "succeeded",
-        imageUrl: { not: null },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
+    expect(dataMock.listSucceededGenerations).toHaveBeenCalledWith("user_1", 20);
     expect(await response.json()).toEqual([
       {
         id: "gen_1",
@@ -427,7 +414,7 @@ describe("generation-related API routes", () => {
 
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual([]);
-    expect(prismaMock.generation.findMany).not.toHaveBeenCalled();
+    expect(dataMock.listSucceededGenerations).not.toHaveBeenCalled();
   });
 
   test("upload uses bearer auth and scopes the pathname before delegating to Vercel Blob", async () => {

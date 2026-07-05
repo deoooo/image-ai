@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireUser } from "@/lib/api-auth";
 import { isBuiltInUserId } from "@/lib/built-in-user";
-import { prisma } from "@/lib/prisma";
+import { listSucceededGenerations } from "@/lib/supabase-data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,15 +12,7 @@ export async function GET(req: Request) {
       return NextResponse.json([]);
     }
 
-    const generations = await prisma.generation.findMany({
-      where: {
-        userId: session.userId,
-        status: "succeeded",
-        imageUrl: { not: null },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    });
+    const generations = await listSucceededGenerations(session.userId, 20);
 
     return NextResponse.json(
       generations.map((generation) => ({
@@ -28,7 +20,7 @@ export async function GET(req: Request) {
         url: generation.imageUrl || undefined,
         prompt: generation.prompt,
         model: generation.model,
-        createdAt: generation.createdAt.getTime(),
+        createdAt: new Date(generation.createdAt).getTime(),
       }))
     );
   } catch (error) {

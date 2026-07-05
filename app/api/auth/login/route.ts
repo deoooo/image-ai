@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createSessionToken, verifyAdminCredentials } from "@/lib/auth";
 import { BUILT_IN_USER, verifyBuiltInUserCredentials } from "@/lib/built-in-user";
 import { verifyPassword } from "@/lib/password";
-import { prisma } from "@/lib/prisma";
+import { findUserByUsername } from "@/lib/supabase-data";
 
 const ADMIN_USERNAME = "lynn";
 
@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const user = await prisma.user.findUnique({ where: { username } });
+    const user = await findUserByUsername(username);
     if (!user || !(await verifyPassword(password, user.passwordHash))) {
       return NextResponse.json(
         { error: "Invalid username or password" },

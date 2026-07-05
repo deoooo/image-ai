@@ -3,7 +3,10 @@ import { ApiAuthError, requireUser } from "@/lib/api-auth";
 import { refundGeneration } from "@/lib/billing";
 import { GrsaiClient } from "@/lib/grsai";
 import { fetchWithProxy } from "@/lib/http";
-import { prisma } from "@/lib/prisma";
+import {
+  findGenerationByTaskIdForUser,
+  markGenerationSucceeded,
+} from "@/lib/supabase-data";
 
 type StatusRequestBody = {
   taskId?: unknown;
@@ -23,9 +26,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Task ID is required" }, { status: 400 });
     }
 
-    const generation = await prisma.generation.findFirst({
-      where: { taskId, userId: session.userId },
-    });
+    const generation = await findGenerationByTaskIdForUser(taskId, session.userId);
 
     if (!generation) {
       return NextResponse.json({ error: "Task not found" }, { status: 404 });
@@ -56,13 +57,7 @@ export async function POST(req: Request) {
         console.error("Failed to upload generated image to R2:", error);
       }
 
-      await prisma.generation.update({
-        where: { id: generation.id },
-        data: {
-          status: "succeeded",
-          imageUrl: finalImageUrl,
-        },
-      });
+      await markGenerationSucceeded(generation.id, finalImageUrl);
     } else if (result.status === "failed") {
       const refund = await refundGeneration(generation.id);
       return NextResponse.json({ ...result, balance: refund.balance });

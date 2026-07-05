@@ -2,15 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { BUILT_IN_USER } from "@/lib/built-in-user";
 import { hashPassword } from "@/lib/password";
-import { prisma } from "@/lib/prisma";
-
-type PrismaErrorWithCode = {
-  code?: string;
-};
-
-function hasPrismaErrorCode(error: unknown, code: string): error is PrismaErrorWithCode {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
-}
+import { SupabaseDataError, createUser, listUsers } from "@/lib/supabase-data";
 
 function isValidBalance(balance: unknown): balance is number {
   return typeof balance === "number" && Number.isFinite(balance) && balance >= 0;
@@ -19,10 +11,7 @@ function isValidBalance(balance: unknown): balance is number {
 export async function GET(req: Request) {
   try {
     requireAdmin(req);
-    const users = await prisma.user.findMany({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, username: true, balance: true, createdAt: true },
-    });
+    const users = await listUsers();
     return NextResponse.json({ users });
   } catch (error) {
     if (error instanceof ApiAuthError) {
@@ -77,13 +66,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const user = await prisma.user.create({
-      data: {
-        username: normalizedUsername,
-        passwordHash: await hashPassword(password),
-        balance,
-      },
-      select: { id: true, username: true, balance: true, createdAt: true },
+    const user = await createUser({
+      username: normalizedUsername,
+      passwordHash: await hashPassword(password),
+      balance,
     });
 
     return NextResponse.json({ user }, { status: 201 });
@@ -92,7 +78,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    if (hasPrismaErrorCode(error, "P2002")) {
+    if (
+      error instanceof SupabaseDataError &&
+      error.code === "duplicate_username"
+    ) {
       return NextResponse.json({ error: "Username already exists" }, { status: 409 });
     }
 

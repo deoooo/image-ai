@@ -6,7 +6,7 @@ import {
   refundGeneration,
 } from "@/lib/billing";
 import { GrsaiClient } from "@/lib/grsai";
-import { prisma } from "@/lib/prisma";
+import { attachTaskToGeneration } from "@/lib/supabase-data";
 
 type GenerateRequestBody = {
   prompt?: unknown;
@@ -112,10 +112,7 @@ export async function POST(req: Request) {
           }
 
           try {
-            await prisma.generation.update({
-              where: { id: charge.generationId },
-              data: { taskId, status: "pending" },
-            });
+            await attachTaskToGeneration(charge.generationId, taskId);
             taskPersisted = true;
           } catch (error) {
             console.error(

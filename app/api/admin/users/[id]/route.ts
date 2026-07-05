@@ -1,14 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
-import { prisma } from "@/lib/prisma";
-
-type PrismaErrorWithCode = {
-  code?: string;
-};
-
-function hasPrismaErrorCode(error: unknown, code: string): error is PrismaErrorWithCode {
-  return typeof error === "object" && error !== null && "code" in error && error.code === code;
-}
+import { SupabaseDataError, updateUserBalance } from "@/lib/supabase-data";
 
 function isValidBalance(balance: unknown): balance is number {
   return typeof balance === "number" && Number.isFinite(balance) && balance >= 0;
@@ -30,11 +22,7 @@ export async function PATCH(
       );
     }
 
-    const user = await prisma.user.update({
-      where: { id },
-      data: { balance },
-      select: { id: true, username: true, balance: true, createdAt: true },
-    });
+    const user = await updateUserBalance(id, balance);
 
     return NextResponse.json({ user });
   } catch (error) {
@@ -42,7 +30,7 @@ export async function PATCH(
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
 
-    if (hasPrismaErrorCode(error, "P2025")) {
+    if (error instanceof SupabaseDataError && error.code === "not_found") {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 

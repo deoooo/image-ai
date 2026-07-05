@@ -21,7 +21,7 @@
 
 - **前端框架**: [Next.js 16](https://nextjs.org/) (App Router)
 - **UI 库**: React 19, [Tailwind CSS v4](https://tailwindcss.com/), [Lucide React](https://lucide.dev/)
-- **数据库**: Prisma + PostgreSQL
+- **数据库**: Supabase
 - **对象存储**: Cloudflare R2
 - **AI 服务**: 支持多种 AI 图像生成服务 (如 Grsai API 等)
 
@@ -31,8 +31,7 @@
 
 - **Node.js**: 推荐 v20 或更高版本。
 - **包管理器**: 推荐使用 `npm` 或 `pnpm`。
-- **PostgreSQL**: 需要可用的 PostgreSQL 数据库连接。
-- **Prisma**: 需要运行 Prisma 迁移与客户端生成。
+- **Supabase**: 用于用户、余额、扣费和生成历史数据。
 - **Cloudflare R2**: 用于存储上传和生成的图片。
 
 ### 2. 克隆项目 & 安装依赖
@@ -76,12 +75,6 @@ R2_PUBLIC_URL=https://pub-xxx.r2.dev
 GRSAI_API_KEY=your_api_key
 # GRSAI_API_BASE_URL=https://api.grsai.com (可选)
 
-# --- Database ---
-# Prisma/PostgreSQL connection string.
-DATABASE_URL=postgresql://user:password@host:5432/database
-# Current Prisma config in prisma.config.ts still reads POSTGRES_URL_NON_POOLING.
-POSTGRES_URL_NON_POOLING=postgresql://user:password@host:5432/database
-
 # --- 安全 ---
 # Optional override for the built-in browser session token signing secret.
 # SESSION_SECRET=replace_with_a_long_random_secret
@@ -89,12 +82,15 @@ POSTGRES_URL_NON_POOLING=postgresql://user:password@host:5432/database
 
 ### 4. 数据库迁移
 
-The application uses Prisma with PostgreSQL. After updating environment variables, run:
+The application uses Supabase for user management, balances, billing, and
+generation history. Before creating users in production, run the SQL in:
 
-```bash
-npx prisma generate
-npx prisma migrate dev
+```text
+supabase/migrations/20260705000000_user_billing.sql
 ```
+
+You can paste it into the Supabase SQL Editor for the project configured by
+`NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`.
 
 ### 5. 启动开发服务器
 

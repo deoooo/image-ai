@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireSession } from "@/lib/api-auth";
 import { BUILT_IN_USER, isBuiltInUserId } from "@/lib/built-in-user";
-import { prisma } from "@/lib/prisma";
+import { findUserById } from "@/lib/supabase-data";
 import { listModelPrices } from "@/lib/model-pricing";
 
 export async function GET(req: Request) {
@@ -27,10 +27,7 @@ export async function GET(req: Request) {
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: session.userId },
-      select: { id: true, username: true, balance: true },
-    });
+    const user = await findUserById(session.userId);
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 

@@ -13,12 +13,15 @@ const hashPasswordMock = vi.hoisted(() => ({
   hashPassword: vi.fn(),
 }));
 
-const prismaMock = vi.hoisted(() => ({
-  user: {
-    findMany: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
+const dataMock = vi.hoisted(() => ({
+  SupabaseDataError: class extends Error {
+    constructor(message: string, public code: string) {
+      super(message);
+    }
   },
+  listUsers: vi.fn(),
+  createUser: vi.fn(),
+  updateUserBalance: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -30,8 +33,11 @@ vi.mock("@/lib/password", () => ({
   hashPassword: hashPasswordMock.hashPassword,
 }));
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: prismaMock,
+vi.mock("@/lib/supabase-data", () => ({
+  SupabaseDataError: dataMock.SupabaseDataError,
+  listUsers: dataMock.listUsers,
+  createUser: dataMock.createUser,
+  updateUserBalance: dataMock.updateUserBalance,
 }));
 
 import { GET, POST } from "@/app/api/admin/users/route";
@@ -44,18 +50,18 @@ describe("admin users API", () => {
   });
 
   test("lists users in reverse creation order with only public fields", async () => {
-    prismaMock.user.findMany.mockResolvedValueOnce([
+    dataMock.listUsers.mockResolvedValueOnce([
       {
         id: "user_2",
         username: "bravo",
         balance: 9,
-        createdAt: new Date("2026-07-02T10:00:00.000Z"),
+        createdAt: "2026-07-02T10:00:00.000Z",
       },
       {
         id: "user_1",
         username: "alpha",
         balance: 4,
-        createdAt: new Date("2026-07-01T10:00:00.000Z"),
+        createdAt: "2026-07-01T10:00:00.000Z",
       },
     ]);
 
@@ -65,10 +71,7 @@ describe("admin users API", () => {
     };
 
     expect(response.status).toBe(200);
-    expect(prismaMock.user.findMany).toHaveBeenCalledWith({
-      orderBy: { createdAt: "desc" },
-      select: { id: true, username: true, balance: true, createdAt: true },
-    });
+    expect(dataMock.listUsers).toHaveBeenCalledWith();
     expect(body.users).toEqual([
       {
         id: "user_2",
@@ -87,11 +90,11 @@ describe("admin users API", () => {
 
   test("creates a user with a trimmed username and hashed password", async () => {
     hashPasswordMock.hashPassword.mockResolvedValueOnce("hashed-secret");
-    prismaMock.user.create.mockResolvedValueOnce({
+    dataMock.createUser.mockResolvedValueOnce({
       id: "user_3",
       username: "alice",
       balance: 12.345,
-      createdAt: new Date("2026-07-02T12:00:00.000Z"),
+      createdAt: "2026-07-02T12:00:00.000Z",
     });
 
     const response = await POST(
@@ -111,13 +114,10 @@ describe("admin users API", () => {
 
     expect(response.status).toBe(201);
     expect(hashPasswordMock.hashPassword).toHaveBeenCalledWith("secret123");
-    expect(prismaMock.user.create).toHaveBeenCalledWith({
-      data: {
-        username: "alice",
-        passwordHash: "hashed-secret",
-        balance: 12.345,
-      },
-      select: { id: true, username: true, balance: true, createdAt: true },
+    expect(dataMock.createUser).toHaveBeenCalledWith({
+      username: "alice",
+      passwordHash: "hashed-secret",
+      balance: 12.345,
     });
     expect(body.user).toEqual({
       id: "user_3",
@@ -129,7 +129,9 @@ describe("admin users API", () => {
 
   test("returns 409 when the username already exists", async () => {
     hashPasswordMock.hashPassword.mockResolvedValueOnce("hashed-secret");
-    prismaMock.user.create.mockRejectedValueOnce({ code: "P2002" });
+    dataMock.createUser.mockRejectedValueOnce(
+      new dataMock.SupabaseDataError("Username already exists", "duplicate_username")
+    );
 
     const response = await POST(
       new Request("http://localhost/api/admin/users", {
@@ -163,7 +165,7 @@ describe("admin users API", () => {
     expect(response.status).toBe(409);
     expect(await response.json()).toEqual({ error: "Username is reserved" });
     expect(hashPasswordMock.hashPassword).not.toHaveBeenCalled();
-    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(dataMock.createUser).not.toHaveBeenCalled();
   });
 
   test("creates the built-in deo user without requiring database access", async () => {
@@ -189,7 +191,7 @@ describe("admin users API", () => {
       },
     });
     expect(hashPasswordMock.hashPassword).not.toHaveBeenCalled();
-    expect(prismaMock.user.create).not.toHaveBeenCalled();
+    expect(dataMock.createUser).not.toHaveBeenCalled();
   });
 
   test("rejects non-admin access with the auth error status", async () => {
@@ -204,11 +206,11 @@ describe("admin users API", () => {
   });
 
   test("updates a user's balance", async () => {
-    prismaMock.user.update.mockResolvedValueOnce({
+    dataMock.updateUserBalance.mockResolvedValueOnce({
       id: "user_1",
       username: "alice",
       balance: 27.125,
-      createdAt: new Date("2026-07-01T12:00:00.000Z"),
+      createdAt: "2026-07-01T12:00:00.000Z",
     });
 
     const response = await PATCH(
@@ -224,11 +226,7 @@ describe("admin users API", () => {
     };
 
     expect(response.status).toBe(200);
-    expect(prismaMock.user.update).toHaveBeenCalledWith({
-      where: { id: "user_1" },
-      data: { balance: 27.125 },
-      select: { id: true, username: true, balance: true, createdAt: true },
-    });
+    expect(dataMock.updateUserBalance).toHaveBeenCalledWith("user_1", 27.125);
     expect(body.user).toEqual({
       id: "user_1",
       username: "alice",
@@ -238,7 +236,9 @@ describe("admin users API", () => {
   });
 
   test("returns 404 when the user does not exist", async () => {
-    prismaMock.user.update.mockRejectedValueOnce({ code: "P2025" });
+    dataMock.updateUserBalance.mockRejectedValueOnce(
+      new dataMock.SupabaseDataError("User not found", "not_found")
+    );
 
     const response = await PATCH(
       new Request("http://localhost/api/admin/users/missing", {
@@ -267,6 +267,6 @@ describe("admin users API", () => {
     expect(await response.json()).toEqual({
       error: "Balance must be a non-negative number",
     });
-    expect(prismaMock.user.update).not.toHaveBeenCalled();
+    expect(dataMock.updateUserBalance).not.toHaveBeenCalled();
   });
 });

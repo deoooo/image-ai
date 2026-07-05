@@ -10,30 +10,37 @@ if (!supabaseUrl || !supabaseServiceKey) {
   console.warn("Supabase credentials missing! Check .env.local");
 }
 
-// Check for proxy environment variables
-const proxyUrl =
-  process.env.HTTPS_PROXY ||
-  process.env.HTTP_PROXY ||
-  process.env.https_proxy ||
-  process.env.http_proxy;
+const supabaseProxyUrl = process.env.SUPABASE_PROXY_URL;
 
-let options: NonNullable<Parameters<typeof createClient>[2]> = {};
+let proxyAgent: HttpsProxyAgent<string> | undefined;
 
-if (proxyUrl) {
-  console.log(`Using proxy for Supabase: ${proxyUrl}`);
-  const agent = new HttpsProxyAgent(proxyUrl);
-
-  options = {
-    global: {
-      fetch: async (url, init) => {
-        return nodeFetch(url.toString(), {
-          ...(init as NodeFetchRequestInit | undefined),
-          agent,
-        }) as unknown as Response;
-      },
-    },
-  };
+if (supabaseProxyUrl) {
+  console.log(`Using explicit proxy for Supabase: ${supabaseProxyUrl}`);
+  proxyAgent = new HttpsProxyAgent(supabaseProxyUrl);
 }
+
+const options: NonNullable<Parameters<typeof createClient>[2]> = {
+  global: {
+    fetch: async (url, init) => {
+      try {
+        return (await nodeFetch(url.toString(), {
+          ...(init as NodeFetchRequestInit | undefined),
+          agent: proxyAgent,
+        })) as unknown as Response;
+      } catch (error) {
+        console.error("Supabase fetch failed:", {
+          host: new URL(url.toString()).host,
+          message: error instanceof Error ? error.message : String(error),
+          cause:
+            error instanceof Error && "cause" in error
+              ? String(error.cause)
+              : undefined,
+        });
+        throw error;
+      }
+    },
+  },
+};
 
 // Create a single supabase client for interacting with your database
 // using the service role key (admin access)

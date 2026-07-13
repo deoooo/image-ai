@@ -10,6 +10,7 @@ vi.mock("@/lib/supabase", () => ({
 }));
 
 import {
+  adjustUserBalance,
   SupabaseDataError,
   chargeGeneration,
   createUser,
@@ -112,6 +113,44 @@ describe("Supabase data layer", () => {
       p_prompt: "prompt",
       p_model: "nano-banana-pro",
       p_price: 0.25,
+    });
+  });
+
+  test("adjusts balances through the atomic Supabase RPC", async () => {
+    supabaseMock.rpc.mockResolvedValueOnce({
+      data: [
+        {
+          id: "user_1",
+          username: "alice",
+          balance: 15,
+          created_at: "2026-07-02T10:00:00.000Z",
+        },
+      ],
+      error: null,
+    });
+
+    await expect(adjustUserBalance("user_1", 5, "credit")).resolves.toEqual({
+      id: "user_1",
+      username: "alice",
+      balance: 15,
+      createdAt: "2026-07-02T10:00:00.000Z",
+    });
+    expect(supabaseMock.rpc).toHaveBeenCalledWith("image_ai_adjust_user_balance", {
+      p_user_id: "user_1",
+      p_amount: 5,
+      p_operation: "credit",
+    });
+  });
+
+  test("maps insufficient balance from the adjustment RPC", async () => {
+    supabaseMock.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "insufficient_balance" },
+    });
+
+    await expect(adjustUserBalance("user_1", 20, "debit")).rejects.toMatchObject({
+      code: "insufficient_balance",
+      message: "Insufficient balance",
     });
   });
 

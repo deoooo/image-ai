@@ -21,7 +21,7 @@ const dataMock = vi.hoisted(() => ({
   },
   listUsers: vi.fn(),
   createUser: vi.fn(),
-  updateUserBalance: vi.fn(),
+  adjustUserBalance: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -37,7 +37,7 @@ vi.mock("@/lib/supabase-data", () => ({
   SupabaseDataError: dataMock.SupabaseDataError,
   listUsers: dataMock.listUsers,
   createUser: dataMock.createUser,
-  updateUserBalance: dataMock.updateUserBalance,
+  adjustUserBalance: dataMock.adjustUserBalance,
 }));
 
 import { GET, POST } from "@/app/api/admin/users/route";
@@ -205,8 +205,8 @@ describe("admin users API", () => {
     expect(await response.json()).toEqual({ error: "Forbidden" });
   });
 
-  test("updates a user's balance", async () => {
-    dataMock.updateUserBalance.mockResolvedValueOnce({
+  test("recharges a user's balance", async () => {
+    dataMock.adjustUserBalance.mockResolvedValueOnce({
       id: "user_1",
       username: "alice",
       balance: 27.125,
@@ -217,7 +217,7 @@ describe("admin users API", () => {
       new Request("http://localhost/api/admin/users/user_1", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ balance: 27.125 }),
+        body: JSON.stringify({ amount: 7.125, operation: "credit" }),
       }),
       { params: Promise.resolve({ id: "user_1" }) }
     );
@@ -226,7 +226,11 @@ describe("admin users API", () => {
     };
 
     expect(response.status).toBe(200);
-    expect(dataMock.updateUserBalance).toHaveBeenCalledWith("user_1", 27.125);
+    expect(dataMock.adjustUserBalance).toHaveBeenCalledWith(
+      "user_1",
+      7.125,
+      "credit"
+    );
     expect(body.user).toEqual({
       id: "user_1",
       username: "alice",
@@ -235,8 +239,30 @@ describe("admin users API", () => {
     });
   });
 
+  test("deducts from a user's balance", async () => {
+    dataMock.adjustUserBalance.mockResolvedValueOnce({
+      id: "user_1",
+      username: "alice",
+      balance: 17,
+      createdAt: "2026-07-01T12:00:00.000Z",
+    });
+
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/users/user_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 3, operation: "debit" }),
+      }),
+      { params: Promise.resolve({ id: "user_1" }) }
+    );
+
+    expect(response.status).toBe(200);
+    expect(dataMock.adjustUserBalance).toHaveBeenCalledWith("user_1", 3, "debit");
+    expect(await response.json()).toMatchObject({ user: { balance: 17 } });
+  });
+
   test("returns 404 when the user does not exist", async () => {
-    dataMock.updateUserBalance.mockRejectedValueOnce(
+    dataMock.adjustUserBalance.mockRejectedValueOnce(
       new dataMock.SupabaseDataError("User not found", "not_found")
     );
 
@@ -244,7 +270,7 @@ describe("admin users API", () => {
       new Request("http://localhost/api/admin/users/missing", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ balance: 27 }),
+        body: JSON.stringify({ amount: 27, operation: "credit" }),
       }),
       { params: Promise.resolve({ id: "missing" }) }
     );
@@ -253,20 +279,55 @@ describe("admin users API", () => {
     expect(await response.json()).toEqual({ error: "User not found" });
   });
 
-  test("rejects negative balances before updating", async () => {
+  test("rejects non-positive adjustment amounts", async () => {
     const response = await PATCH(
       new Request("http://localhost/api/admin/users/user_1", {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ balance: -1 }),
+        body: JSON.stringify({ amount: 0, operation: "credit" }),
       }),
       { params: Promise.resolve({ id: "user_1" }) }
     );
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: "Balance must be a non-negative number",
+      error: "Amount must be greater than zero",
     });
-    expect(dataMock.updateUserBalance).not.toHaveBeenCalled();
+    expect(dataMock.adjustUserBalance).not.toHaveBeenCalled();
+  });
+
+  test("rejects an unsupported balance operation", async () => {
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/users/user_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 5, operation: "replace" }),
+      }),
+      { params: Promise.resolve({ id: "user_1" }) }
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Operation must be credit or debit",
+    });
+    expect(dataMock.adjustUserBalance).not.toHaveBeenCalled();
+  });
+
+  test("returns 409 when a deduction exceeds the user's balance", async () => {
+    dataMock.adjustUserBalance.mockRejectedValueOnce(
+      new dataMock.SupabaseDataError("Insufficient balance", "insufficient_balance")
+    );
+
+    const response = await PATCH(
+      new Request("http://localhost/api/admin/users/user_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 30, operation: "debit" }),
+      }),
+      { params: Promise.resolve({ id: "user_1" }) }
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({ error: "Insufficient balance" });
   });
 });

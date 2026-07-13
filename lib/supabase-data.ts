@@ -98,7 +98,10 @@ function isDuplicateError(error: { code?: string; message?: string }): boolean {
 }
 
 function isNotFoundError(error: { code?: string; message?: string }): boolean {
-  return error.code === "PGRST116" || /0 rows/i.test(error.message ?? "");
+  return (
+    error.code === "PGRST116" ||
+    /0 rows|user_not_found/i.test(error.message ?? "")
+  );
 }
 
 function throwDataError(error: { code?: string; message?: string }): never {
@@ -171,15 +174,18 @@ export async function createUser({
   return mapPublicUser(assertNoError(result));
 }
 
-export async function updateUserBalance(id: string, balance: number): Promise<PublicUser> {
-  const result = (await supabaseAdmin
-    .from(USERS_TABLE)
-    .update({ balance })
-    .eq("id", id)
-    .select("id, username, balance, created_at")
-    .single()) as SupabaseResult<PublicUserRow>;
+export async function adjustUserBalance(
+  id: string,
+  amount: number,
+  operation: "credit" | "debit"
+): Promise<PublicUser> {
+  const result = (await supabaseAdmin.rpc("image_ai_adjust_user_balance", {
+    p_user_id: id,
+    p_amount: amount,
+    p_operation: operation,
+  })) as SupabaseResult<PublicUserRow[]>;
 
-  return mapPublicUser(assertNoError(result));
+  return mapPublicUser(firstRpcRow(result));
 }
 
 export async function findUserByUsername(username: string): Promise<StoredUser | null> {

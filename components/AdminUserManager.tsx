@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { LogOut, Plus, RefreshCw, Save } from "lucide-react";
+import { LogOut, Minus, Plus, RefreshCw } from "lucide-react";
 
 interface AdminUser {
   id: string;
@@ -38,6 +38,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [adjustmentAmounts, setAdjustmentAmounts] = useState<Record<string, string>>({});
 
   const isValidBalance = (value: number) => Number.isFinite(value) && value >= 0;
 
@@ -141,9 +142,10 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
     }
   };
 
-  const updateBalance = async (user: AdminUser) => {
-    if (!isValidBalance(user.balance)) {
-      showMessage("Balance must be a non-negative number.", "error");
+  const adjustBalance = async (user: AdminUser, operation: "credit" | "debit") => {
+    const amount = Number(adjustmentAmounts[user.id]);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showMessage("Amount must be greater than zero.", "error");
       return;
     }
 
@@ -158,7 +160,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          balance: user.balance,
+          amount,
+          operation,
         }),
       });
 
@@ -170,14 +173,19 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
         | null;
 
       if (!response.ok || !data?.user) {
-        throw new Error(data?.error || "Failed to update balance");
+        throw new Error(data?.error || "Failed to adjust balance");
       }
 
       const updatedUser = data.user;
       setUsers((prev) => prev.map((item) => (item.id === user.id ? updatedUser : item)));
-      showMessage(`Updated ${user.username}'s balance.`);
+      setAdjustmentAmounts((prev) => ({ ...prev, [user.id]: "" }));
+      showMessage(
+        `${operation === "credit" ? "Recharged" : "Deducted"} ${amount} ${
+          operation === "credit" ? "to" : "from"
+        } ${user.username}.`
+      );
     } catch (error) {
-      showMessage(error instanceof Error ? error.message : "Failed to update balance", "error");
+      showMessage(error instanceof Error ? error.message : "Failed to adjust balance", "error");
     } finally {
       setSavingUserId(null);
     }
@@ -193,7 +201,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
         <header className="flex flex-col gap-4 border-b border-gray-200 pb-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight">Admin user manager</h1>
-            <p className="text-sm text-gray-500">Create accounts and adjust balances.</p>
+            <p className="text-sm text-gray-500">Create accounts, recharge, and deduct balances.</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
@@ -304,20 +312,21 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
                 <tr className="text-gray-500">
                   <th className="border-b border-gray-200 px-0 py-3 font-medium">Username</th>
                   <th className="border-b border-gray-200 px-0 py-3 font-medium">Created</th>
-                  <th className="border-b border-gray-200 px-0 py-3 font-medium">Balance</th>
-                  <th className="border-b border-gray-200 px-0 py-3 text-right font-medium">Save</th>
+                  <th className="border-b border-gray-200 px-0 py-3 font-medium">Current balance</th>
+                  <th className="border-b border-gray-200 px-0 py-3 font-medium">Amount</th>
+                  <th className="border-b border-gray-200 px-0 py-3 text-right font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && users.length === 0 ? (
                   <tr>
-                    <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={4}>
+                    <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={5}>
                       Loading users...
                     </td>
                   </tr>
                 ) : users.length === 0 ? (
                   <tr>
-                    <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={4}>
+                    <td className="border-b border-gray-100 py-6 text-gray-500" colSpan={5}>
                       No users yet.
                     </td>
                   </tr>
@@ -333,35 +342,50 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
                         <td className="border-b border-gray-100 py-3 pr-4 text-gray-600">
                           {createdAtFormatter.format(new Date(user.createdAt))}
                         </td>
+                        <td className="border-b border-gray-100 py-3 pr-4 font-medium tabular-nums text-gray-900">
+                          {user.balance}
+                        </td>
                         <td className="border-b border-gray-100 py-3 pr-4">
                           <input
                             type="number"
-                            min={0}
+                            min={0.001}
                             step={0.001}
                             inputMode="decimal"
-                            value={user.balance}
+                            value={adjustmentAmounts[user.id] ?? ""}
                             onChange={(event) => {
-                              const nextBalance = Number(event.target.value);
-                              setUsers((prev) =>
-                                prev.map((item) =>
-                                  item.id === user.id ? { ...item, balance: nextBalance } : item
-                                )
-                              );
+                              setAdjustmentAmounts((prev) => ({
+                                ...prev,
+                                [user.id]: event.target.value,
+                              }));
                             }}
+                            placeholder="0.000"
+                            aria-label={`Amount for ${user.username}`}
                             className="h-10 w-32 rounded-lg border border-gray-200 bg-white px-3 text-sm outline-none transition focus:border-gray-300 focus:ring-2 focus:ring-gray-900/10"
                           />
                         </td>
                         <td className="border-b border-gray-100 py-3 text-right">
-                          <button
-                            type="button"
-                            onClick={() => void updateBalance(user)}
-                            disabled={isSaving}
-                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                            title={`Save balance for ${user.username}`}
-                            aria-label={`Save balance for ${user.username}`}
-                          >
-                            <Save className="h-4 w-4" />
-                          </button>
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void adjustBalance(user, "credit")}
+                              disabled={isSaving}
+                              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-medium text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              title={`Recharge ${user.username}`}
+                            >
+                              <Plus className="h-4 w-4" />
+                              Recharge
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void adjustBalance(user, "debit")}
+                              disabled={isSaving}
+                              className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                              title={`Deduct from ${user.username}`}
+                            >
+                              <Minus className="h-4 w-4" />
+                              Deduct
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

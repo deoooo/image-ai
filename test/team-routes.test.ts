@@ -52,6 +52,19 @@ describe("team management routes", () => {
     });
   });
 
+  test("explains when the first administrator username is reserved", async () => {
+    const response = await createTeam(new Request("http://localhost/api/admin/teams", {
+      method: "POST",
+      body: JSON.stringify({ name: "Design", balance: 0, adminUsername: " LyNn ", adminPassword: "secret" }),
+    }));
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: "The administrator username “LyNn” is reserved. Choose another username.",
+    });
+    expect(dataMock.createTeamWithAdmin).not.toHaveBeenCalled();
+  });
+
   test("team administrator only lists users from the team in the session", async () => {
     dataMock.listTeamUsers.mockResolvedValue([]);
     const response = await listTeamUsers(new Request("http://localhost/api/team/users"));

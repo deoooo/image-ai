@@ -39,7 +39,10 @@ export async function POST(req: Request) {
       );
     }
     if (["lynn", "deo"].includes(normalizedUsername.toLowerCase())) {
-      return NextResponse.json({ error: "Username is reserved" }, { status: 409 });
+      return NextResponse.json(
+        { error: `The administrator username “${normalizedUsername}” is reserved. Choose another username.` },
+        { status: 409 }
+      );
     }
     if (!validNonNegative(balance)) {
       return NextResponse.json({ error: "Balance must be non-negative" }, { status: 400 });

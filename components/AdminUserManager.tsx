@@ -51,6 +51,10 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
       }),
     []
   );
+  const balanceFormatter = useMemo(
+    () => new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }),
+    []
+  );
 
   const clearMessage = useCallback(() => {
     setMessage("");
@@ -346,7 +350,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
                           {createdAtFormatter.format(new Date(user.createdAt))}
                         </td>
                         <td className="border-b border-gray-100 py-3 pr-4 font-medium tabular-nums text-gray-900">
-                          {user.balance}
+                          {balanceFormatter.format(user.balance)}
                         </td>
                         <td className="border-b border-gray-100 py-3 pr-4">
                           <input

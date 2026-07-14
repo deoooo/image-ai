@@ -25,6 +25,18 @@ describe("auth sessions", () => {
     expect(verifySessionToken(token)).toEqual(session);
   });
 
+  test("round-trips a team administrator session with its team scope", () => {
+    vi.stubEnv("SESSION_SECRET", "test-secret");
+    const session: Session = {
+      role: "team_admin",
+      userId: "admin_1",
+      username: "team-owner",
+      teamId: "team_1",
+    };
+
+    expect(verifySessionToken(createSessionToken(session))).toEqual(session);
+  });
+
   test("falls back to the built-in production session secret", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("SESSION_SECRET", "");

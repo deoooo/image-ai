@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AdminUserManager } from "@/components/AdminUserManager";
+import { TeamAdminManager } from "@/components/TeamAdminManager";
 import { AuthGate } from "@/components/AuthGate";
 import { ImageUploader } from "@/components/ImageUploader";
 import { GenerationForm } from "@/components/GenerationForm";
@@ -139,7 +140,10 @@ function RegularUserHome({
       });
 
       if (!response.ok) {
-        throw new Error("Generation failed");
+        const errorBody = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(errorBody?.error || "Generation failed");
       }
 
       if (!response.body) {
@@ -302,7 +306,8 @@ function RegularUserHome({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
             <p className="text-sm text-gray-500">
-              Balance: <span className="font-medium text-gray-900">{user.balance}</span>
+              {user.teamName ? `${user.teamName} balance` : "Balance"}: <span className="font-medium text-gray-900">{user.balance}</span>
+              {user.dailyLimit !== undefined && <span> · Today: {user.dailySpent ?? 0} / {user.dailyLimit}</span>}
             </p>
           </div>
         </div>
@@ -346,6 +351,11 @@ function RegularUserHome({
               progress={generationProgress}
               modelPrice={modelPrice}
               balance={user.balance}
+              dailyRemaining={
+                user.dailyLimit === undefined
+                  ? undefined
+                  : Math.max(0, user.dailyLimit - (user.dailySpent ?? 0))
+              }
             />
             {statusMessage && (
               <div className="mt-4 p-3 bg-blue-50 text-blue-700 text-sm rounded-lg flex items-center gap-2 animate-pulse">
@@ -376,6 +386,10 @@ export default function Home() {
       {({ token, user, modelPrices, refreshSession, logout }) => {
         if (user.role === "admin") {
           return <AdminUserManager token={token} onLogout={logout} />;
+        }
+
+        if (user.role === "team_admin") {
+          return <TeamAdminManager token={token} user={user} onLogout={logout} />;
         }
 
         return (

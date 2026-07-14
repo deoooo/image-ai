@@ -61,11 +61,25 @@ export async function POST(req: Request) {
       );
     }
 
-    const token = createSessionToken({
-      role: "user",
-      userId: user.id,
-      username: user.username,
-    });
+    if (user.role === "team_admin" && user.teamId) {
+      const token = createSessionToken({
+        role: "team_admin",
+        userId: user.id,
+        username: user.username,
+        teamId: user.teamId,
+      });
+      return NextResponse.json({
+        token,
+        user: {
+          role: "team_admin",
+          id: user.id,
+          username: user.username,
+          teamId: user.teamId,
+        },
+      });
+    }
+
+    const token = createSessionToken({ role: "user", userId: user.id, username: user.username });
     return NextResponse.json({
       token,
       user: {

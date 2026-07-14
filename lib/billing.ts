@@ -20,7 +20,13 @@ export async function chargeForGeneration({
   userId: string;
   prompt: string;
   model: string;
-}): Promise<{ generationId: string; priceCharged: number; balance: number }> {
+}): Promise<{
+  generationId: string;
+  priceCharged: number;
+  balance: number;
+  dailySpent?: number;
+  dailyLimit?: number;
+}> {
   const price = getModelPrice(model);
 
   if (price === null) {
@@ -35,6 +41,13 @@ export async function chargeForGeneration({
       error.code === "insufficient_balance"
     ) {
       throw new BillingError("Insufficient balance", 402);
+    }
+
+    if (
+      error instanceof SupabaseDataError &&
+      error.code === "daily_limit_exceeded"
+    ) {
+      throw new BillingError("Daily limit exceeded", 429);
     }
 
     throw error;

@@ -87,6 +87,8 @@ generation history. Before creating users in production, run the SQL in:
 
 ```text
 supabase/migrations/20260705000000_user_billing.sql
+supabase/migrations/20260713000000_balance_adjustments.sql
+supabase/migrations/20260714000000_team_billing.sql
 ```
 
 You can paste it into the Supabase SQL Editor for the project configured by
@@ -109,14 +111,17 @@ The temporary administrator account is:
 - Username: `lynn`
 - Password: `lynn2026`
 
-Administrators create regular users and set balances from the user management
-screen. Regular users sign in with username and password.
+The super administrator can create individual users, teams, and team
+administrators. Team administrators create their own members and configure each
+member's daily spending limit. Regular users sign in with username and password.
 
 ### Billing
 
-Each generation charges the current model's code-defined price from the user's
-balance. If the balance is insufficient, generation is rejected. If a charged
-generation fails, the charge is refunded once.
+Individual users are charged from their own balance. Team members are charged
+from the team's shared balance and are also constrained by their per-member
+daily limit, which resets at midnight in `Asia/Shanghai`. If either balance or
+limit is insufficient, generation is rejected. Failed generations refund both
+the charged balance and the member's same-day usage exactly once.
 
 - `nano-banana-pro`: 0.25 RMB
 - `nano-banana-fast`: 0.08 RMB

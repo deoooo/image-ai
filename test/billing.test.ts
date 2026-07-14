@@ -40,6 +40,16 @@ describe("billing", () => {
     ).rejects.toThrow("Insufficient balance");
   });
 
+  test("rejects a generation that exceeds the member daily limit", async () => {
+    dataMock.chargeGeneration.mockRejectedValueOnce(
+      new dataMock.SupabaseDataError("Daily limit exceeded", "daily_limit_exceeded")
+    );
+
+    await expect(
+      chargeForGeneration({ userId: "u1", prompt: "prompt", model: "nano-banana-pro" })
+    ).rejects.toMatchObject({ message: "Daily limit exceeded", status: 429 });
+  });
+
   test("deducts price and creates a charged generation", async () => {
     dataMock.chargeGeneration.mockResolvedValueOnce({
       generationId: "g1",

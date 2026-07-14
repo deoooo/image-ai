@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 const USERS_TABLE = "image_ai_users";
 const GENERATIONS_TABLE = "image_ai_generations";
+const TEAMS_TABLE = "image_ai_teams";
 
 type SupabaseResult<T> = {
   data: T | null;
@@ -14,9 +15,21 @@ type UserRow = {
   password_hash: string;
   balance: number;
   created_at: string;
+  role: "user" | "team_admin";
+  team_id: string | null;
+  daily_limit: number | null;
+  daily_spent: number;
+  daily_spent_date: string | null;
 };
 
-type PublicUserRow = Pick<UserRow, "id" | "username" | "balance" | "created_at">;
+type PublicUserRow = Omit<UserRow, "password_hash">;
+
+type TeamRow = {
+  id: string;
+  name: string;
+  balance: number;
+  created_at: string;
+};
 
 type GenerationRow = {
   id: string;
@@ -34,6 +47,18 @@ type GenerationRow = {
 export type PublicUser = {
   id: string;
   username: string;
+  balance: number;
+  createdAt: string;
+  role: "user" | "team_admin";
+  teamId: string | null;
+  dailyLimit: number | null;
+  dailySpent: number;
+  dailySpentDate: string | null;
+};
+
+export type Team = {
+  id: string;
+  name: string;
   balance: number;
   createdAt: string;
 };
@@ -63,9 +88,35 @@ export class SupabaseDataError extends Error {
 }
 
 function mapPublicUser(row: PublicUserRow): PublicUser {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value;
+  const today = `${get("year")}-${get("month")}-${get("day")}`;
   return {
     id: row.id,
     username: row.username,
+    balance: Number(row.balance),
+    createdAt: row.created_at,
+    role: row.role ?? "user",
+    teamId: row.team_id ?? null,
+    dailyLimit: row.daily_limit == null ? null : Number(row.daily_limit),
+    dailySpent:
+      row.daily_spent_date === today && row.daily_spent != null
+        ? Number(row.daily_spent)
+        : 0,
+    dailySpentDate: row.daily_spent_date ?? null,
+  };
+}
+
+function mapTeam(row: TeamRow): Team {
+  return {
+    id: row.id,
+    name: row.name,
     balance: Number(row.balance),
     createdAt: row.created_at,
   };
@@ -117,6 +168,14 @@ function throwDataError(error: { code?: string; message?: string }): never {
     throw new SupabaseDataError("Insufficient balance", "insufficient_balance");
   }
 
+  if (/daily_limit_exceeded/i.test(error.message ?? "")) {
+    throw new SupabaseDataError("Daily limit exceeded", "daily_limit_exceeded");
+  }
+
+  if (/team_not_found/i.test(error.message ?? "")) {
+    throw new SupabaseDataError("Team not found", "team_not_found");
+  }
+
   throw new SupabaseDataError(error.message || "Supabase request failed", "supabase_error");
 }
 
@@ -146,7 +205,8 @@ function firstRpcRow<T>(result: SupabaseResult<T[]>): T {
 export async function listUsers(): Promise<PublicUser[]> {
   const result = (await supabaseAdmin
     .from(USERS_TABLE)
-    .select("id, username, balance, created_at")
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
+    .is("team_id", null)
     .order("created_at", { ascending: false })) as SupabaseResult<PublicUserRow[]>;
 
   return assertNoError(result).map(mapPublicUser);
@@ -168,7 +228,7 @@ export async function createUser({
       password_hash: passwordHash,
       balance,
     })
-    .select("id, username, balance, created_at")
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
     .single()) as SupabaseResult<PublicUserRow>;
 
   return mapPublicUser(assertNoError(result));
@@ -191,7 +251,7 @@ export async function adjustUserBalance(
 export async function findUserByUsername(username: string): Promise<StoredUser | null> {
   const result = (await supabaseAdmin
     .from(USERS_TABLE)
-    .select("id, username, password_hash, balance, created_at")
+    .select("id, username, password_hash, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
     .eq("username", username)
     .maybeSingle()) as SupabaseResult<UserRow>;
 
@@ -205,7 +265,7 @@ export async function findUserByUsername(username: string): Promise<StoredUser |
 export async function findUserById(id: string): Promise<PublicUser | null> {
   const result = (await supabaseAdmin
     .from(USERS_TABLE)
-    .select("id, username, balance, created_at")
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
     .eq("id", id)
     .maybeSingle()) as SupabaseResult<PublicUserRow>;
 
@@ -226,14 +286,26 @@ export async function chargeGeneration({
   prompt: string;
   model: string;
   price: number;
-}): Promise<{ generationId: string; priceCharged: number; balance: number }> {
+}): Promise<{
+  generationId: string;
+  priceCharged: number;
+  balance: number;
+  dailySpent?: number;
+  dailyLimit?: number;
+}> {
   const result = (await supabaseAdmin.rpc("image_ai_charge_for_generation", {
     p_user_id: userId,
     p_prompt: prompt,
     p_model: model,
     p_price: price,
   })) as SupabaseResult<
-    Array<{ generation_id: string; price_charged: number; balance: number }>
+    Array<{
+      generation_id: string;
+      price_charged: number;
+      balance: number;
+      daily_spent: number | null;
+      daily_limit: number | null;
+    }>
   >;
 
   const row = firstRpcRow(result);
@@ -241,7 +313,133 @@ export async function chargeGeneration({
     generationId: row.generation_id,
     priceCharged: Number(row.price_charged),
     balance: Number(row.balance),
+    dailySpent: row.daily_spent == null ? undefined : Number(row.daily_spent),
+    dailyLimit: row.daily_limit == null ? undefined : Number(row.daily_limit),
   };
+}
+
+export async function listTeams(): Promise<Team[]> {
+  const result = (await supabaseAdmin
+    .from(TEAMS_TABLE)
+    .select("id, name, balance, created_at")
+    .order("created_at", { ascending: false })) as SupabaseResult<TeamRow[]>;
+
+  return assertNoError(result).map(mapTeam);
+}
+
+export async function findTeamById(id: string): Promise<Team | null> {
+  const result = (await supabaseAdmin
+    .from(TEAMS_TABLE)
+    .select("id, name, balance, created_at")
+    .eq("id", id)
+    .maybeSingle()) as SupabaseResult<TeamRow>;
+
+  if (result.error) throwDataError(result.error);
+  return result.data ? mapTeam(result.data) : null;
+}
+
+export async function createTeamWithAdmin({
+  name,
+  balance,
+  adminUsername,
+  adminPasswordHash,
+}: {
+  name: string;
+  balance: number;
+  adminUsername: string;
+  adminPasswordHash: string;
+}): Promise<{ team: Team; admin: PublicUser }> {
+  const result = (await supabaseAdmin.rpc("image_ai_create_team_with_admin", {
+    p_name: name,
+    p_balance: balance,
+    p_admin_username: adminUsername,
+    p_admin_password_hash: adminPasswordHash,
+  })) as SupabaseResult<Array<TeamRow & {
+    admin_id: string;
+    admin_username: string;
+    admin_created_at: string;
+  }>>;
+  const row = firstRpcRow(result);
+  return {
+    team: mapTeam(row),
+    admin: {
+      id: row.admin_id,
+      username: row.admin_username,
+      balance: 0,
+      createdAt: row.admin_created_at,
+      role: "team_admin",
+      teamId: row.id,
+      dailyLimit: null,
+      dailySpent: 0,
+      dailySpentDate: null,
+    },
+  };
+}
+
+export async function adjustTeamBalance(
+  id: string,
+  amount: number,
+  operation: "credit" | "debit"
+): Promise<Team> {
+  const result = (await supabaseAdmin.rpc("image_ai_adjust_team_balance", {
+    p_team_id: id,
+    p_amount: amount,
+    p_operation: operation,
+  })) as SupabaseResult<TeamRow[]>;
+  return mapTeam(firstRpcRow(result));
+}
+
+export async function listTeamUsers(teamId: string): Promise<PublicUser[]> {
+  const result = (await supabaseAdmin
+    .from(USERS_TABLE)
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
+    .eq("team_id", teamId)
+    .order("created_at", { ascending: false })) as SupabaseResult<PublicUserRow[]>;
+  return assertNoError(result).map(mapPublicUser);
+}
+
+export async function createTeamUser({
+  teamId,
+  username,
+  passwordHash,
+  dailyLimit,
+  role = "user",
+}: {
+  teamId: string;
+  username: string;
+  passwordHash: string;
+  dailyLimit: number | null;
+  role?: "user" | "team_admin";
+}): Promise<PublicUser> {
+  const result = (await supabaseAdmin
+    .from(USERS_TABLE)
+    .insert({
+      username,
+      password_hash: passwordHash,
+      balance: 0,
+      role,
+      team_id: teamId,
+      daily_limit: role === "user" ? dailyLimit : null,
+    })
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
+    .single()) as SupabaseResult<PublicUserRow>;
+  return mapPublicUser(assertNoError(result));
+}
+
+export async function updateTeamUserDailyLimit(
+  teamId: string,
+  userId: string,
+  dailyLimit: number
+): Promise<PublicUser> {
+  const result = (await supabaseAdmin
+    .from(USERS_TABLE)
+    .update({ daily_limit: dailyLimit })
+    .eq("id", userId)
+    .eq("team_id", teamId)
+    .eq("role", "user")
+    .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
+    .single()) as SupabaseResult<PublicUserRow>;
+  return mapPublicUser(assertNoError(result));
 }
 
 export async function refundChargedGeneration(

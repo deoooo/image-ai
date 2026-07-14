@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { LogOut, Minus, Plus, RefreshCw } from "lucide-react";
+import { TeamManagementPanel } from "@/components/TeamManagementPanel";
 
 interface AdminUser {
   id: string;
@@ -200,8 +201,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
         <header className="flex flex-col gap-4 border-b border-gray-200 pb-4 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight">Admin user manager</h1>
-            <p className="text-sm text-gray-500">Create accounts, recharge, and deduct balances.</p>
+            <h1 className="text-2xl font-semibold tracking-tight">Super administrator</h1>
+            <p className="text-sm text-gray-500">Manage individual accounts, teams, administrators, and shared balances.</p>
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600">
@@ -217,6 +218,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
             </button>
           </div>
         </header>
+
+        <TeamManagementPanel token={token} />
 
         <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm md:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">

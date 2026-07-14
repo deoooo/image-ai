@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireSession } from "@/lib/api-auth";
 import { BUILT_IN_USER, isBuiltInUserId } from "@/lib/built-in-user";
-import { findUserById } from "@/lib/supabase-data";
+import { findTeamById, findUserById } from "@/lib/supabase-data";
 import { listModelPrices } from "@/lib/model-pricing";
 
 export async function GET(req: Request) {
@@ -11,6 +11,32 @@ export async function GET(req: Request) {
     if (session.role === "admin") {
       return NextResponse.json({
         user: { role: "admin", username: session.username },
+        modelPrices: listModelPrices(),
+      });
+    }
+
+    if (session.role === "team_admin") {
+      const [admin, team] = await Promise.all([
+        findUserById(session.userId),
+        findTeamById(session.teamId),
+      ]);
+      if (
+        !admin ||
+        admin.role !== "team_admin" ||
+        admin.teamId !== session.teamId ||
+        !team
+      ) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      return NextResponse.json({
+        user: {
+          role: "team_admin",
+          id: admin.id,
+          username: admin.username,
+          teamId: team.id,
+          teamName: team.name,
+          teamBalance: team.balance,
+        },
         modelPrices: listModelPrices(),
       });
     }
@@ -31,8 +57,44 @@ export async function GET(req: Request) {
 
     if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+    if (user.role !== "user") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    let balance = user.balance;
+    let teamName: string | undefined;
+    if (user.teamId) {
+      const team = await findTeamById(user.teamId);
+      if (!team) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      balance = team.balance;
+      teamName = team.name;
+    }
+
+    const dateParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(new Date());
+    const getDatePart = (type: Intl.DateTimeFormatPartTypes) =>
+      dateParts.find((part) => part.type === type)?.value;
+    const today = `${getDatePart("year")}-${getDatePart("month")}-${getDatePart("day")}`;
+
     return NextResponse.json({
-      user: { role: "user", id: user.id, username: user.username, balance: user.balance },
+      user: {
+        role: "user",
+        id: user.id,
+        username: user.username,
+        balance,
+        ...(user.teamId
+          ? {
+              teamId: user.teamId,
+              teamName,
+              dailyLimit: user.dailyLimit ?? 0,
+              dailySpent: user.dailySpentDate === today ? user.dailySpent : 0,
+            }
+          : {}),
+      },
       modelPrices: listModelPrices(),
     });
   } catch (error) {

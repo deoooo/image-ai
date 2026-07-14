@@ -19,6 +19,7 @@ interface GenerationFormProps {
   progress?: number;
   modelPrice: number;
   balance?: number;
+  dailyRemaining?: number;
 }
 
 export function GenerationForm({
@@ -35,8 +36,11 @@ export function GenerationForm({
   progress = 0,
   modelPrice,
   balance,
+  dailyRemaining,
 }: GenerationFormProps) {
-  const hasInsufficientBalance = balance !== undefined && balance < modelPrice;
+  const hasInsufficientBalance =
+    (balance !== undefined && balance < modelPrice) ||
+    (dailyRemaining !== undefined && dailyRemaining < modelPrice);
   const isDisabled = isGenerating || !prompt.trim() || hasInsufficientBalance;
   const isGptImage = model === "gpt-image-2";
 
@@ -126,6 +130,9 @@ export function GenerationForm({
         Selected model price: <span className="font-semibold">{modelPrice}</span>
         {balance !== undefined && (
           <span className="ml-3 text-gray-500">Balance: {balance}</span>
+        )}
+        {dailyRemaining !== undefined && (
+          <span className="ml-3 text-gray-500">Daily remaining: {dailyRemaining}</span>
         )}
       </div>
 

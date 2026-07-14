@@ -49,6 +49,7 @@ describe("Supabase data layer", () => {
     };
     const builder = {
       select: vi.fn(() => builder),
+      is: vi.fn(() => builder),
       order: vi.fn(async () => result),
     };
     supabaseMock.from.mockReturnValueOnce(builder);
@@ -59,10 +60,18 @@ describe("Supabase data layer", () => {
         username: "alice",
         balance: 12.5,
         createdAt: "2026-07-02T10:00:00.000Z",
+        role: "user",
+        teamId: null,
+        dailyLimit: null,
+        dailySpent: 0,
+        dailySpentDate: null,
       },
     ]);
     expect(supabaseMock.from).toHaveBeenCalledWith("image_ai_users");
-    expect(builder.select).toHaveBeenCalledWith("id, username, balance, created_at");
+    expect(builder.select).toHaveBeenCalledWith(
+      "id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date"
+    );
+    expect(builder.is).toHaveBeenCalledWith("team_id", null);
     expect(builder.order).toHaveBeenCalledWith("created_at", { ascending: false });
   });
 
@@ -116,6 +125,32 @@ describe("Supabase data layer", () => {
     });
   });
 
+  test("returns team daily usage metadata from the charge RPC", async () => {
+    supabaseMock.rpc.mockResolvedValueOnce({
+      data: [{
+        generation_id: "gen_2",
+        price_charged: 0.25,
+        balance: 19.75,
+        daily_spent: 1.25,
+        daily_limit: 5,
+      }],
+      error: null,
+    });
+
+    await expect(chargeGeneration({
+      userId: "member_1",
+      prompt: "prompt",
+      model: "nano-banana-pro",
+      price: 0.25,
+    })).resolves.toEqual({
+      generationId: "gen_2",
+      priceCharged: 0.25,
+      balance: 19.75,
+      dailySpent: 1.25,
+      dailyLimit: 5,
+    });
+  });
+
   test("adjusts balances through the atomic Supabase RPC", async () => {
     supabaseMock.rpc.mockResolvedValueOnce({
       data: [
@@ -134,6 +169,11 @@ describe("Supabase data layer", () => {
       username: "alice",
       balance: 15,
       createdAt: "2026-07-02T10:00:00.000Z",
+      role: "user",
+      teamId: null,
+      dailyLimit: null,
+      dailySpent: 0,
+      dailySpentDate: null,
     });
     expect(supabaseMock.rpc).toHaveBeenCalledWith("image_ai_adjust_user_balance", {
       p_user_id: "user_1",

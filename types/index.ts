@@ -27,4 +27,21 @@ export interface ModelPrice {
 
 export type AuthenticatedUser =
   | { role: "admin"; username: string }
-  | { role: "user"; id: string; username: string; balance: number };
+  | {
+      role: "team_admin";
+      id: string;
+      username: string;
+      teamId: string;
+      teamName: string;
+      teamBalance: number;
+    }
+  | {
+      role: "user";
+      id: string;
+      username: string;
+      balance: number;
+      teamId?: string;
+      teamName?: string;
+      dailyLimit?: number;
+      dailySpent?: number;
+    };

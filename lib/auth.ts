@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export type Session =
   | { role: "admin"; username: string }
+  | { role: "team_admin"; userId: string; username: string; teamId: string }
   | { role: "user"; userId: string; username: string };
 
 const ADMIN_USERNAME = "lynn";
@@ -50,6 +51,14 @@ function isSession(value: unknown): value is Session {
     return (
       typeof (value as { userId?: unknown }).userId === "string" &&
       typeof (value as { username?: unknown }).username === "string"
+    );
+  }
+
+  if (value.role === "team_admin") {
+    return (
+      typeof (value as { userId?: unknown }).userId === "string" &&
+      typeof (value as { username?: unknown }).username === "string" &&
+      typeof (value as { teamId?: unknown }).teamId === "string"
     );
   }
 

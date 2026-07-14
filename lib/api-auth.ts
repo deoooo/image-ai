@@ -29,3 +29,11 @@ export function requireUser(req: Request): Extract<Session, { role: "user" }> {
   if (session.role !== "user") throw new ApiAuthError("Forbidden", 403);
   return session;
 }
+
+export function requireTeamAdmin(
+  req: Request
+): Extract<Session, { role: "team_admin" }> {
+  const session = requireSession(req);
+  if (session.role !== "team_admin") throw new ApiAuthError("Forbidden", 403);
+  return session;
+}

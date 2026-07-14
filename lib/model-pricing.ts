@@ -1,6 +1,7 @@
 import type { GenerationModel } from "@/types";
 
 export const MODEL_PRICES: Record<GenerationModel, number> = {
+  "gpt-image-2": 0.1,
   "nano-banana-fast": 0.08,
   "nano-banana-pro": 0.25,
 };

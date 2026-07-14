@@ -1,7 +1,8 @@
 import { fetchWithProxy } from "./http";
+import type { GenerationModel } from "@/types";
 
 export interface GrsaiDrawRequest {
-  model?: "nano-banana-fast" | "nano-banana-pro";
+  model?: GenerationModel;
   prompt: string;
   aspectRatio?: string;
   imageSize?: "1K" | "2K" | "4K";
@@ -14,7 +15,7 @@ export interface GrsaiDrawResponse {
   results:
     | {
         url: string;
-        content: string;
+        content?: string;
       }[]
     | null;
   progress: number;
@@ -38,23 +39,33 @@ export class GrsaiClient {
       JSON.stringify(params, null, 2)
     );
 
+    const model = params.model || "nano-banana-pro";
+    const isGptImage = model === "gpt-image-2";
+    const endpoint = isGptImage
+      ? "/v1/draw/completions"
+      : "/v1/draw/nano-banana";
+    const aspectRatio = isGptImage
+      ? toGptImageAspectRatio(params.aspectRatio)
+      : params.aspectRatio || "auto";
+    const body = {
+      model,
+      prompt: params.prompt,
+      aspectRatio,
+      ...(isGptImage ? {} : { imageSize: params.imageSize || "1K" }),
+      urls: params.urls || [],
+      webHook: "-1",
+      shutProgress: false,
+    };
+
     const response = await fetchWithProxy(
-      `${this.baseUrl}/v1/draw/nano-banana`,
+      `${this.baseUrl}${endpoint}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${this.apiKey}`,
         },
-        body: JSON.stringify({
-          model: params.model || "nano-banana-pro",
-          prompt: params.prompt,
-          aspectRatio: params.aspectRatio || "auto",
-          imageSize: params.imageSize || "1K",
-          urls: params.urls || [],
-          webHook: "-1", // Fixed value for polling mode
-          shutProgress: false, // Disable progress in webhook
-        }),
+        body: JSON.stringify(body),
       }
     );
 
@@ -145,5 +156,18 @@ export class GrsaiClient {
     }
 
     throw new Error("Polling timed out");
+  }
+}
+
+function toGptImageAspectRatio(aspectRatio?: string): string {
+  switch (aspectRatio) {
+    case "1:1":
+      return "1024x1024";
+    case "3:2":
+      return "1536x1024";
+    case "2:3":
+      return "1024x1536";
+    default:
+      return "auto";
   }
 }

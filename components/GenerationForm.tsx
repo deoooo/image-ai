@@ -38,6 +38,18 @@ export function GenerationForm({
 }: GenerationFormProps) {
   const hasInsufficientBalance = balance !== undefined && balance < modelPrice;
   const isDisabled = isGenerating || !prompt.trim() || hasInsufficientBalance;
+  const isGptImage = model === "gpt-image-2";
+
+  const handleModelChange = (nextModel: GenerationModel) => {
+    if (nextModel === "gpt-image-2") {
+      onImageSizeChange("1K");
+      if (!["auto", "1:1", "3:2", "2:3"].includes(aspectRatio)) {
+        onAspectRatioChange("auto");
+      }
+    }
+
+    onModelChange(nextModel);
+  };
 
   return (
     <div className="space-y-6">
@@ -47,9 +59,10 @@ export function GenerationForm({
         </label>
         <select
           value={model}
-          onChange={(e) => onModelChange(e.target.value as GenerationModel)}
+          onChange={(e) => handleModelChange(e.target.value as GenerationModel)}
           className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
         >
+          <option value="gpt-image-2">GPT Image 2</option>
           <option value="nano-banana-fast">Nano Banana Fast</option>
           <option value="nano-banana-pro">Nano Banana Pro</option>
         </select>
@@ -63,11 +76,12 @@ export function GenerationForm({
           <select
             value={imageSize}
             onChange={(e) => onImageSizeChange(e.target.value as ImageSize)}
+            disabled={isGptImage}
             className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
           >
             <option value="1K">1K</option>
-            <option value="2K">2K</option>
-            <option value="4K">4K</option>
+            {!isGptImage && <option value="2K">2K</option>}
+            {!isGptImage && <option value="4K">4K</option>}
           </select>
         </div>
 
@@ -82,15 +96,19 @@ export function GenerationForm({
           >
             <option value="auto">Auto</option>
             <option value="1:1">1:1</option>
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="4:3">4:3</option>
-            <option value="3:4">3:4</option>
             <option value="3:2">3:2</option>
             <option value="2:3">2:3</option>
-            <option value="5:4">5:4</option>
-            <option value="4:5">4:5</option>
-            <option value="21:9">21:9</option>
+            {!isGptImage && (
+              <>
+                <option value="16:9">16:9</option>
+                <option value="9:16">9:16</option>
+                <option value="4:3">4:3</option>
+                <option value="3:4">3:4</option>
+                <option value="5:4">5:4</option>
+                <option value="4:5">4:5</option>
+                <option value="21:9">21:9</option>
+              </>
+            )}
           </select>
         </div>
       </div>

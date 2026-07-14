@@ -7,6 +7,7 @@ import {
 } from "@/lib/billing";
 import { GrsaiClient } from "@/lib/grsai";
 import { attachTaskToGeneration } from "@/lib/supabase-data";
+import type { GenerationModel } from "@/types";
 
 type GenerateRequestBody = {
   prompt?: unknown;
@@ -46,7 +47,7 @@ export async function POST(req: Request) {
       model,
     });
     generationId = charge.generationId;
-    const drawModel = model as "nano-banana-fast" | "nano-banana-pro";
+    const drawModel = model as GenerationModel;
 
     const encoder = new TextEncoder();
     const stream = new ReadableStream({

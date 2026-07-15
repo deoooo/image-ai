@@ -1,16 +1,17 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { hashPassword } from "@/lib/password";
-import { createTeamUser, findTeamById, SupabaseDataError } from "@/lib/supabase-data";
+import { createTeamUser, findTeamById, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
 
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireAdmin(req);
+    const session = requireAdmin(req);
     const { id } = await params;
-    if (!(await findTeamById(id))) {
+    const team = await findTeamById(id);
+    if (!team) {
       return NextResponse.json({ error: "Team not found" }, { status: 404 });
     }
     const { username, password } = await req.json();
@@ -27,6 +28,15 @@ export async function POST(
       passwordHash: await hashPassword(password),
       dailyLimit: null,
       role: "team_admin",
+    });
+    await recordOperation({
+      actorRole: "admin",
+      actorUsername: session.username,
+      teamId: id,
+      action: "team_admin_created",
+      targetType: "team_admin",
+      targetId: admin.id,
+      targetName: admin.username,
     });
     return NextResponse.json({ admin }, { status: 201 });
   } catch (error) {

@@ -3,6 +3,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 const USERS_TABLE = "image_ai_users";
 const GENERATIONS_TABLE = "image_ai_generations";
 const TEAMS_TABLE = "image_ai_teams";
+const OPERATION_LOGS_TABLE = "image_ai_operation_logs";
+const OPERATION_LOGS_VIEW = "image_ai_operation_logs_with_team";
 
 type SupabaseResult<T> = {
   data: T | null;
@@ -28,6 +30,22 @@ type TeamRow = {
   id: string;
   name: string;
   balance: number;
+  created_at: string;
+};
+
+type OperationLogRow = {
+  id: string;
+  actor_role: "admin" | "team_admin";
+  actor_username: string;
+  team_id: string | null;
+  team_name: string | null;
+  action: string;
+  target_type: string;
+  target_id: string | null;
+  target_name: string;
+  amount: number | null;
+  previous_value: number | null;
+  new_value: number | null;
   created_at: string;
 };
 
@@ -60,6 +78,22 @@ export type Team = {
   id: string;
   name: string;
   balance: number;
+  createdAt: string;
+};
+
+export type OperationLog = {
+  id: string;
+  actorRole: "admin" | "team_admin";
+  actorUsername: string;
+  teamId: string | null;
+  teamName: string | null;
+  action: string;
+  targetType: string;
+  targetId: string | null;
+  targetName: string;
+  amount: number | null;
+  previousValue: number | null;
+  newValue: number | null;
   createdAt: string;
 };
 
@@ -118,6 +152,24 @@ function mapTeam(row: TeamRow): Team {
     id: row.id,
     name: row.name,
     balance: Number(row.balance),
+    createdAt: row.created_at,
+  };
+}
+
+function mapOperationLog(row: OperationLogRow): OperationLog {
+  return {
+    id: row.id,
+    actorRole: row.actor_role,
+    actorUsername: row.actor_username,
+    teamId: row.team_id,
+    teamName: row.team_name,
+    action: row.action,
+    targetType: row.target_type,
+    targetId: row.target_id,
+    targetName: row.target_name,
+    amount: row.amount == null ? null : Number(row.amount),
+    previousValue: row.previous_value == null ? null : Number(row.previous_value),
+    newValue: row.new_value == null ? null : Number(row.new_value),
     createdAt: row.created_at,
   };
 }
@@ -440,6 +492,62 @@ export async function updateTeamUserDailyLimit(
     .select("id, username, balance, created_at, role, team_id, daily_limit, daily_spent, daily_spent_date")
     .single()) as SupabaseResult<PublicUserRow>;
   return mapPublicUser(assertNoError(result));
+}
+
+export async function recordOperation({
+  actorRole,
+  actorUsername,
+  actorUserId = null,
+  teamId = null,
+  action,
+  targetType,
+  targetId = null,
+  targetName,
+  amount = null,
+  previousValue = null,
+  newValue = null,
+}: {
+  actorRole: "admin" | "team_admin";
+  actorUsername: string;
+  actorUserId?: string | null;
+  teamId?: string | null;
+  action: string;
+  targetType: string;
+  targetId?: string | null;
+  targetName: string;
+  amount?: number | null;
+  previousValue?: number | null;
+  newValue?: number | null;
+}): Promise<void> {
+  const result = (await supabaseAdmin
+    .from(OPERATION_LOGS_TABLE)
+    .insert({
+      actor_role: actorRole,
+      actor_username: actorUsername,
+      actor_user_id: actorUserId,
+      team_id: teamId,
+      action,
+      target_type: targetType,
+      target_id: targetId,
+      target_name: targetName,
+      amount,
+      previous_value: previousValue,
+      new_value: newValue,
+    })
+    .select("id")
+    .single()) as SupabaseResult<{ id: string }>;
+  assertNoError(result);
+}
+
+export async function listOperationLogs(teamId?: string): Promise<OperationLog[]> {
+  let query = supabaseAdmin
+    .from(OPERATION_LOGS_VIEW)
+    .select("id, actor_role, actor_username, team_id, team_name, action, target_type, target_id, target_name, amount, previous_value, new_value, created_at");
+  if (teamId) query = query.eq("team_id", teamId);
+  const result = (await query
+    .order("created_at", { ascending: false })
+    .limit(100)) as SupabaseResult<OperationLogRow[]>;
+  return assertNoError(result).map(mapOperationLog);
 }
 
 export async function refundChargedGeneration(

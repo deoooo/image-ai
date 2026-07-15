@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/password";
 import {
   createTeamWithAdmin,
   listTeams,
+  recordOperation,
   SupabaseDataError,
 } from "@/lib/supabase-data";
 
@@ -26,7 +27,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    requireAdmin(req);
+    const session = requireAdmin(req);
     const { name, balance, adminUsername, adminPassword } = await req.json();
     const normalizedName = typeof name === "string" ? name.trim() : "";
     const normalizedUsername =
@@ -53,6 +54,17 @@ export async function POST(req: Request) {
       balance,
       adminUsername: normalizedUsername,
       adminPasswordHash: await hashPassword(adminPassword),
+    });
+    await recordOperation({
+      actorRole: "admin",
+      actorUsername: session.username,
+      teamId: result.team.id,
+      action: "team_created",
+      targetType: "team",
+      targetId: result.team.id,
+      targetName: result.team.name,
+      amount: balance,
+      newValue: result.team.balance,
     });
     return NextResponse.json(result, { status: 201 });
   } catch (error) {

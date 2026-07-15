@@ -22,6 +22,7 @@ const dataMock = vi.hoisted(() => ({
   listUsers: vi.fn(),
   createUser: vi.fn(),
   adjustUserBalance: vi.fn(),
+  recordOperation: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => ({
@@ -38,6 +39,7 @@ vi.mock("@/lib/supabase-data", () => ({
   listUsers: dataMock.listUsers,
   createUser: dataMock.createUser,
   adjustUserBalance: dataMock.adjustUserBalance,
+  recordOperation: dataMock.recordOperation,
 }));
 
 import { GET, POST } from "@/app/api/admin/users/route";

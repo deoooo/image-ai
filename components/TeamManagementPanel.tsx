@@ -6,7 +6,7 @@ import { AlertCircle, Building2, CheckCircle2, LoaderCircle, Plus, RefreshCw } f
 type Team = { id: string; name: string; balance: number; createdAt: string };
 type Notice = { tone: "success" | "error"; text: string } | null;
 
-export function TeamManagementPanel({ token }: { token: string }) {
+export function TeamManagementPanel({ token, onOperation }: { token: string; onOperation?: () => void }) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [name, setName] = useState("");
   const [balance, setBalance] = useState(0);
@@ -66,6 +66,7 @@ export function TeamManagementPanel({ token }: { token: string }) {
         tone: "success",
         text: `Created team “${teamName}” and administrator “${administrator}”. The team is shown below.`,
       });
+      onOperation?.();
     } catch (error) {
       const text = error instanceof Error ? error.message : "Failed to create team";
       if (text.toLowerCase().includes("username") && text.toLowerCase().includes("reserved")) {
@@ -90,6 +91,7 @@ export function TeamManagementPanel({ token }: { token: string }) {
       setTeams((current) => current.map((item) => item.id === team.id ? data?.team as Team : item));
       setAmounts((current) => ({ ...current, [team.id]: "" }));
       setNotice({ tone: "success", text: `Recharged ${balanceFormatter.format(amount)} to ${team.name}.` });
+      onOperation?.();
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : "Recharge failed" });
     } finally { setSaving(null); }
@@ -108,6 +110,7 @@ export function TeamManagementPanel({ token }: { token: string }) {
       });
       setAdminForms((current) => ({ ...current, [team.id]: { username: "", password: "" } }));
       setNotice({ tone: "success", text: `Team administrator “${form.username.trim()}” created.` });
+      onOperation?.();
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : "Failed to add administrator" });
     } finally { setSaving(null); }
@@ -174,8 +177,8 @@ export function TeamManagementPanel({ token }: { token: string }) {
           const adminForm = adminForms[team.id] || { username: "", password: "" };
           return <article key={team.id} className="rounded-xl border border-gray-200 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
-              <div><h3 className="font-semibold">{team.name}</h3><p className="text-xs text-gray-500">Shared team balance</p></div>
-              <strong className="text-lg tabular-nums">{balanceFormatter.format(team.balance)}</strong>
+              <div><h3 className="font-semibold">{team.name}</h3><p className="text-xs text-gray-500">Shared balance available for all team members</p></div>
+              <div className="text-right"><p className="text-xs text-gray-500">Available balance</p><strong className="text-lg tabular-nums">{balanceFormatter.format(team.balance)}</strong></div>
             </div>
             <div className="flex gap-2">
               <input aria-label={`Recharge amount for ${team.name}`} type="number" min="0.001" step="0.001" inputMode="decimal" value={amounts[team.id] || ""} onChange={(event) => setAmounts((value) => ({ ...value, [team.id]: event.target.value }))} placeholder="Recharge amount" className="h-10 min-w-0 flex-1 rounded-lg border px-3" />

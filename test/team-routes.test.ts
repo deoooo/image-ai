@@ -17,6 +17,7 @@ const dataMock = vi.hoisted(() => ({
   createTeamUser: vi.fn(),
   listTeamUsers: vi.fn(),
   updateTeamUserDailyLimit: vi.fn(),
+  recordOperation: vi.fn(),
 }));
 
 vi.mock("@/lib/api-auth", () => authMock);

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { LogOut, Minus, Plus, RefreshCw } from "lucide-react";
 import { TeamManagementPanel } from "@/components/TeamManagementPanel";
+import { OperationLogPanel } from "@/components/OperationLogPanel";
 
 interface AdminUser {
   id: string;
@@ -40,6 +41,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [adjustmentAmounts, setAdjustmentAmounts] = useState<Record<string, string>>({});
+  const [operationRefreshKey, setOperationRefreshKey] = useState(0);
 
   const isValidBalance = (value: number) => Number.isFinite(value) && value >= 0;
 
@@ -140,6 +142,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
       setPassword("");
       setBalance(0);
       showMessage("User created.");
+      setOperationRefreshKey((value) => value + 1);
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "Failed to create user", "error");
     } finally {
@@ -189,6 +192,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
           operation === "credit" ? "to" : "from"
         } ${user.username}.`
       );
+      setOperationRefreshKey((value) => value + 1);
     } catch (error) {
       showMessage(error instanceof Error ? error.message : "Failed to adjust balance", "error");
     } finally {
@@ -223,7 +227,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
           </div>
         </header>
 
-        <TeamManagementPanel token={token} />
+        <TeamManagementPanel token={token} onOperation={() => setOperationRefreshKey((value) => value + 1)} />
 
         <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm md:p-6">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -402,6 +406,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
             </table>
           </div>
         </section>
+
+        <OperationLogPanel token={token} scope="admin" refreshKey={operationRefreshKey} />
       </div>
     </main>
   );

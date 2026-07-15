@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { BUILT_IN_USER } from "@/lib/built-in-user";
 import { hashPassword } from "@/lib/password";
-import { SupabaseDataError, createUser, listUsers } from "@/lib/supabase-data";
+import { SupabaseDataError, createUser, listUsers, recordOperation } from "@/lib/supabase-data";
 
 function isValidBalance(balance: unknown): balance is number {
   return typeof balance === "number" && Number.isFinite(balance) && balance >= 0;
@@ -24,7 +24,7 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    requireAdmin(req);
+    const session = requireAdmin(req);
     const { username, password, balance } = await req.json();
 
     const normalizedUsername = typeof username === "string" ? username.trim() : "";
@@ -70,6 +70,16 @@ export async function POST(req: Request) {
       username: normalizedUsername,
       passwordHash: await hashPassword(password),
       balance,
+    });
+    await recordOperation({
+      actorRole: "admin",
+      actorUsername: session.username,
+      action: "user_created",
+      targetType: "user",
+      targetId: user.id,
+      targetName: user.username,
+      amount: balance,
+      newValue: user.balance,
     });
 
     return NextResponse.json({ user }, { status: 201 });

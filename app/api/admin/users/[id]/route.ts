@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
-import { adjustUserBalance, SupabaseDataError } from "@/lib/supabase-data";
+import { adjustUserBalance, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
 
 function isValidAmount(amount: unknown): amount is number {
   return typeof amount === "number" && Number.isFinite(amount) && amount > 0;
@@ -15,7 +15,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    requireAdmin(req);
+    const session = requireAdmin(req);
     const { id } = await params;
     const { amount, operation } = await req.json();
 
@@ -34,6 +34,17 @@ export async function PATCH(
     }
 
     const user = await adjustUserBalance(id, amount, operation);
+    await recordOperation({
+      actorRole: "admin",
+      actorUsername: session.username,
+      action: operation === "credit" ? "user_balance_credited" : "user_balance_debited",
+      targetType: "user",
+      targetId: user.id,
+      targetName: user.username,
+      amount,
+      previousValue: operation === "credit" ? user.balance - amount : user.balance + amount,
+      newValue: user.balance,
+    });
 
     return NextResponse.json({ user });
   } catch (error) {

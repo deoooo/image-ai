@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireTeamAdmin } from "@/lib/api-auth";
 import { hashPassword } from "@/lib/password";
-import { createTeamUser, listTeamUsers, SupabaseDataError } from "@/lib/supabase-data";
+import { createTeamUser, listTeamUsers, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
 
 export async function GET(req: Request) {
   try {
@@ -35,6 +35,17 @@ export async function POST(req: Request) {
       username: normalized,
       passwordHash: await hashPassword(password),
       dailyLimit,
+    });
+    await recordOperation({
+      actorRole: "team_admin",
+      actorUsername: session.username,
+      actorUserId: session.userId,
+      teamId: session.teamId,
+      action: "team_member_created",
+      targetType: "team_member",
+      targetId: user.id,
+      targetName: user.username,
+      newValue: dailyLimit,
     });
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {

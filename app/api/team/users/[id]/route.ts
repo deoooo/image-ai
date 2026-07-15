@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireTeamAdmin } from "@/lib/api-auth";
-import { SupabaseDataError, updateTeamUserDailyLimit } from "@/lib/supabase-data";
+import { recordOperation, SupabaseDataError, updateTeamUserDailyLimit } from "@/lib/supabase-data";
 
 export async function PATCH(
   req: Request,
@@ -14,6 +14,17 @@ export async function PATCH(
       return NextResponse.json({ error: "Daily limit must be non-negative" }, { status: 400 });
     }
     const user = await updateTeamUserDailyLimit(session.teamId, id, dailyLimit);
+    await recordOperation({
+      actorRole: "team_admin",
+      actorUsername: session.username,
+      actorUserId: session.userId,
+      teamId: session.teamId,
+      action: "member_daily_limit_updated",
+      targetType: "team_member",
+      targetId: user.id,
+      targetName: user.username,
+      newValue: dailyLimit,
+    });
     return NextResponse.json({ user });
   } catch (error) {
     if (error instanceof ApiAuthError) {

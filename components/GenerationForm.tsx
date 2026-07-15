@@ -127,7 +127,7 @@ export function GenerationForm({
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
-        Selected model price: <span className="font-semibold">{modelPrice}</span>
+        Selected model price: <span className="font-semibold">{modelPrice} RMB</span>
         {balance !== undefined && (
           <span className="ml-3 text-gray-500">Balance: {balance}</span>
         )}

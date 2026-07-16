@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { LogOut, Minus, Plus, RefreshCw } from "lucide-react";
 import { TeamManagementPanel } from "@/components/TeamManagementPanel";
 import { OperationLogPanel } from "@/components/OperationLogPanel";
+import { formatMoney, isValidMoney } from "@/lib/money";
 
 interface AdminUser {
   id: string;
@@ -43,7 +44,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
   const [adjustmentAmounts, setAdjustmentAmounts] = useState<Record<string, string>>({});
   const [operationRefreshKey, setOperationRefreshKey] = useState(0);
 
-  const isValidBalance = (value: number) => Number.isFinite(value) && value >= 0;
+  const isValidBalance = (value: number) => isValidMoney(value);
 
   const createdAtFormatter = useMemo(
     () =>
@@ -53,11 +54,6 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
       }),
     []
   );
-  const balanceFormatter = useMemo(
-    () => new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }),
-    []
-  );
-
   const clearMessage = useCallback(() => {
     setMessage("");
     setMessageTone("idle");
@@ -152,8 +148,8 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
 
   const adjustBalance = async (user: AdminUser, operation: "credit" | "debit") => {
     const amount = Number(adjustmentAmounts[user.id]);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      showMessage("Amount must be greater than zero.", "error");
+    if (!isValidMoney(amount, { positive: true })) {
+      showMessage("Amount must be greater than zero with at most 3 decimal places.", "error");
       return;
     }
 
@@ -188,7 +184,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
       setUsers((prev) => prev.map((item) => (item.id === user.id ? updatedUser : item)));
       setAdjustmentAmounts((prev) => ({ ...prev, [user.id]: "" }));
       showMessage(
-        `${operation === "credit" ? "Recharged" : "Deducted"} ${amount} ${
+        `${operation === "credit" ? "Recharged" : "Deducted"} ${formatMoney(amount)} ${
           operation === "credit" ? "to" : "from"
         } ${user.username}.`
       );
@@ -354,7 +350,7 @@ export function AdminUserManager({ token, onLogout }: AdminUserManagerProps) {
                           {createdAtFormatter.format(new Date(user.createdAt))}
                         </td>
                         <td className="border-b border-gray-100 py-3 pr-4 font-medium tabular-nums text-gray-900">
-                          {balanceFormatter.format(user.balance)}
+                          {formatMoney(user.balance)}
                         </td>
                         <td className="border-b border-gray-100 py-3 pr-4">
                           <input

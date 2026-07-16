@@ -293,8 +293,37 @@ describe("admin users API", () => {
 
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({
-      error: "Amount must be greater than zero",
+      error: "Amount must be greater than zero with at most 3 decimal places",
     });
+    expect(dataMock.adjustUserBalance).not.toHaveBeenCalled();
+  });
+
+  test("rejects balances and adjustments with more than 3 decimal places", async () => {
+    const createResponse = await POST(
+      new Request("http://localhost/api/admin/users", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ username: "alice", password: "secret", balance: 12.3456 }),
+      })
+    );
+    const adjustResponse = await PATCH(
+      new Request("http://localhost/api/admin/users/user_1", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ amount: 0.0001, operation: "credit" }),
+      }),
+      { params: Promise.resolve({ id: "user_1" }) }
+    );
+
+    expect(createResponse.status).toBe(400);
+    expect(await createResponse.json()).toEqual({
+      error: "Balance must be non-negative with at most 3 decimal places",
+    });
+    expect(adjustResponse.status).toBe(400);
+    expect(await adjustResponse.json()).toEqual({
+      error: "Amount must be greater than zero with at most 3 decimal places",
+    });
+    expect(dataMock.createUser).not.toHaveBeenCalled();
     expect(dataMock.adjustUserBalance).not.toHaveBeenCalled();
   });
 

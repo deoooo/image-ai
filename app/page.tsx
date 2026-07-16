@@ -17,6 +17,7 @@ import {
   ModelPrice,
 } from "@/types";
 import { LogOut, Sparkles } from "lucide-react";
+import { formatMoney, subtractMoney } from "@/lib/money";
 
 type RegularUser = Extract<AuthenticatedUser, { role: "user" }>;
 
@@ -306,8 +307,8 @@ function RegularUserHome({
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Image AI</h1>
             <p className="text-sm text-gray-500">
-              {user.teamName ? `${user.teamName} balance` : "Balance"}: <span className="font-medium text-gray-900">{user.balance}</span>
-              {user.dailyLimit !== undefined && <span> · Today: {user.dailySpent ?? 0} / {user.dailyLimit}</span>}
+              {user.teamName ? `${user.teamName} balance` : "Balance"}: <span className="font-medium text-gray-900">{formatMoney(user.balance)}</span>
+              {user.dailyLimit !== undefined && <span> · Today: {formatMoney(user.dailySpent ?? 0)} / {formatMoney(user.dailyLimit)}</span>}
             </p>
           </div>
         </div>
@@ -354,7 +355,7 @@ function RegularUserHome({
               dailyRemaining={
                 user.dailyLimit === undefined
                   ? undefined
-                  : Math.max(0, user.dailyLimit - (user.dailySpent ?? 0))
+                  : Math.max(0, subtractMoney(user.dailyLimit, user.dailySpent ?? 0))
               }
             />
             {statusMessage && (

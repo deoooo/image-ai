@@ -85,6 +85,33 @@ describe("team management routes", () => {
     });
   });
 
+  test("rejects team balances and daily limits with more than 3 decimal places", async () => {
+    const teamResponse = await createTeam(new Request("http://localhost/api/admin/teams", {
+      method: "POST",
+      body: JSON.stringify({ name: "Design", balance: 1.2345, adminUsername: "owner", adminPassword: "secret" }),
+    }));
+    const memberResponse = await createTeamUser(new Request("http://localhost/api/team/users", {
+      method: "POST",
+      body: JSON.stringify({ username: "alice", password: "secret", dailyLimit: 1.2345 }),
+    }));
+    const limitResponse = await updateLimit(new Request("http://localhost/api/team/users/member_1", {
+      method: "PATCH", body: JSON.stringify({ dailyLimit: 1.2345 }),
+    }), { params: Promise.resolve({ id: "member_1" }) });
+
+    expect(teamResponse.status).toBe(400);
+    expect(await teamResponse.json()).toEqual({
+      error: "Balance must be non-negative with at most 3 decimal places",
+    });
+    expect(memberResponse.status).toBe(400);
+    expect(await memberResponse.json()).toEqual({
+      error: "Daily limit must be non-negative with at most 3 decimal places",
+    });
+    expect(limitResponse.status).toBe(400);
+    expect(await limitResponse.json()).toEqual({
+      error: "Daily limit must be non-negative with at most 3 decimal places",
+    });
+  });
+
   test("daily-limit updates are scoped to the administrator team", async () => {
     dataMock.updateTeamUserDailyLimit.mockResolvedValue({ id: "member_1", dailyLimit: 4 });
     const response = await updateLimit(new Request("http://localhost/api/team/users/member_1", {

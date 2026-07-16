@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AlertCircle, Building2, CheckCircle2, LoaderCircle, Plus, RefreshCw } from "lucide-react";
+import { formatMoney, isValidMoney } from "@/lib/money";
 
 type Team = { id: string; name: string; balance: number; createdAt: string };
 type Notice = { tone: "success" | "error"; text: string } | null;
@@ -19,10 +20,6 @@ export function TeamManagementPanel({ token, onOperation }: { token: string; onO
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
   const adminUsernameRef = useRef<HTMLInputElement>(null);
-  const balanceFormatter = useMemo(
-    () => new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }),
-    []
-  );
 
   const request = useCallback(async (url: string, init?: RequestInit) => {
     const response = await fetch(url, {
@@ -79,8 +76,8 @@ export function TeamManagementPanel({ token, onOperation }: { token: string; onO
 
   async function recharge(team: Team) {
     const amount = Number(amounts[team.id]);
-    if (!Number.isFinite(amount) || amount <= 0) {
-      setNotice({ tone: "error", text: "Recharge amount must be greater than zero." });
+    if (!isValidMoney(amount, { positive: true })) {
+      setNotice({ tone: "error", text: "Recharge amount must be greater than zero with at most 3 decimal places." });
       return;
     }
     setSaving(team.id); setNotice(null);
@@ -90,7 +87,7 @@ export function TeamManagementPanel({ token, onOperation }: { token: string; onO
       });
       setTeams((current) => current.map((item) => item.id === team.id ? data?.team as Team : item));
       setAmounts((current) => ({ ...current, [team.id]: "" }));
-      setNotice({ tone: "success", text: `Recharged ${balanceFormatter.format(amount)} to ${team.name}.` });
+      setNotice({ tone: "success", text: `Recharged ${formatMoney(amount)} to ${team.name}.` });
       onOperation?.();
     } catch (error) {
       setNotice({ tone: "error", text: error instanceof Error ? error.message : "Recharge failed" });
@@ -156,7 +153,7 @@ export function TeamManagementPanel({ token, onOperation }: { token: string; onO
           Team admin password
           <input type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} placeholder="Initial password" autoComplete="new-password" className="h-11 rounded-lg border border-gray-200 px-3 font-normal text-gray-900 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-900/10" />
         </label>
-        <button type="submit" disabled={saving === "create" || !name.trim() || !adminUsername.trim() || !adminPassword || !Number.isFinite(balance) || balance < 0} className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-lg bg-gray-900 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 lg:col-span-2 lg:mt-[26px]">
+        <button type="submit" disabled={saving === "create" || !name.trim() || !adminUsername.trim() || !adminPassword || !isValidMoney(balance)} className="inline-flex h-11 items-center justify-center gap-2 self-start rounded-lg bg-gray-900 px-4 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-40 lg:col-span-2 lg:mt-[26px]">
           {saving === "create" ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
           {saving === "create" ? "Creating..." : "Create team"}
         </button>
@@ -178,7 +175,7 @@ export function TeamManagementPanel({ token, onOperation }: { token: string; onO
           return <article key={team.id} className="rounded-xl border border-gray-200 p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div><h3 className="font-semibold">{team.name}</h3><p className="text-xs text-gray-500">Shared balance available for all team members</p></div>
-              <div className="text-right"><p className="text-xs text-gray-500">Available balance</p><strong className="text-lg tabular-nums">{balanceFormatter.format(team.balance)}</strong></div>
+              <div className="text-right"><p className="text-xs text-gray-500">Available balance</p><strong className="text-lg tabular-nums">{formatMoney(team.balance)}</strong></div>
             </div>
             <div className="flex gap-2">
               <input aria-label={`Recharge amount for ${team.name}`} type="number" min="0.001" step="0.001" inputMode="decimal" value={amounts[team.id] || ""} onChange={(event) => setAmounts((value) => ({ ...value, [team.id]: event.target.value }))} placeholder="Recharge amount" className="h-10 min-w-0 flex-1 rounded-lg border px-3" />

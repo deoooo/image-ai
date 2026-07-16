@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiAuthError, requireTeamAdmin } from "@/lib/api-auth";
 import { hashPassword } from "@/lib/password";
 import { createTeamUser, listTeamUsers, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
+import { isValidMoney, normalizeMoney } from "@/lib/money";
 
 export async function GET(req: Request) {
   try {
@@ -27,14 +28,18 @@ export async function POST(req: Request) {
     if (["lynn", "deo"].includes(normalized.toLowerCase())) {
       return NextResponse.json({ error: "Username is reserved" }, { status: 409 });
     }
-    if (typeof dailyLimit !== "number" || !Number.isFinite(dailyLimit) || dailyLimit < 0) {
-      return NextResponse.json({ error: "Daily limit must be non-negative" }, { status: 400 });
+    if (!isValidMoney(dailyLimit)) {
+      return NextResponse.json(
+        { error: "Daily limit must be non-negative with at most 3 decimal places" },
+        { status: 400 }
+      );
     }
+    const normalizedDailyLimit = normalizeMoney(dailyLimit);
     const user = await createTeamUser({
       teamId: session.teamId,
       username: normalized,
       passwordHash: await hashPassword(password),
-      dailyLimit,
+      dailyLimit: normalizedDailyLimit,
     });
     await recordOperation({
       actorRole: "team_admin",
@@ -45,7 +50,7 @@ export async function POST(req: Request) {
       targetType: "team_member",
       targetId: user.id,
       targetName: user.username,
-      newValue: dailyLimit,
+      newValue: normalizedDailyLimit,
     });
     return NextResponse.json({ user }, { status: 201 });
   } catch (error) {

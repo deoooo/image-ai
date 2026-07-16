@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { normalizeMoney } from "@/lib/money";
 
 const USERS_TABLE = "image_ai_users";
 const GENERATIONS_TABLE = "image_ai_generations";
@@ -134,14 +135,14 @@ function mapPublicUser(row: PublicUserRow): PublicUser {
   return {
     id: row.id,
     username: row.username,
-    balance: Number(row.balance),
+    balance: normalizeMoney(Number(row.balance)),
     createdAt: row.created_at,
     role: row.role ?? "user",
     teamId: row.team_id ?? null,
-    dailyLimit: row.daily_limit == null ? null : Number(row.daily_limit),
+    dailyLimit: row.daily_limit == null ? null : normalizeMoney(Number(row.daily_limit)),
     dailySpent:
       row.daily_spent_date === today && row.daily_spent != null
-        ? Number(row.daily_spent)
+        ? normalizeMoney(Number(row.daily_spent))
         : 0,
     dailySpentDate: row.daily_spent_date ?? null,
   };
@@ -151,7 +152,7 @@ function mapTeam(row: TeamRow): Team {
   return {
     id: row.id,
     name: row.name,
-    balance: Number(row.balance),
+    balance: normalizeMoney(Number(row.balance)),
     createdAt: row.created_at,
   };
 }
@@ -167,9 +168,10 @@ function mapOperationLog(row: OperationLogRow): OperationLog {
     targetType: row.target_type,
     targetId: row.target_id,
     targetName: row.target_name,
-    amount: row.amount == null ? null : Number(row.amount),
-    previousValue: row.previous_value == null ? null : Number(row.previous_value),
-    newValue: row.new_value == null ? null : Number(row.new_value),
+    amount: row.amount == null ? null : normalizeMoney(Number(row.amount)),
+    previousValue:
+      row.previous_value == null ? null : normalizeMoney(Number(row.previous_value)),
+    newValue: row.new_value == null ? null : normalizeMoney(Number(row.new_value)),
     createdAt: row.created_at,
   };
 }
@@ -190,7 +192,7 @@ function mapGeneration(row: GenerationRow): StoredGeneration {
     imageUrl: row.image_url,
     status: row.status,
     userId: row.user_id,
-    priceCharged: Number(row.price_charged),
+    priceCharged: normalizeMoney(Number(row.price_charged)),
     chargeStatus: row.charge_status,
     createdAt: row.created_at,
   };
@@ -363,10 +365,12 @@ export async function chargeGeneration({
   const row = firstRpcRow(result);
   return {
     generationId: row.generation_id,
-    priceCharged: Number(row.price_charged),
-    balance: Number(row.balance),
-    dailySpent: row.daily_spent == null ? undefined : Number(row.daily_spent),
-    dailyLimit: row.daily_limit == null ? undefined : Number(row.daily_limit),
+    priceCharged: normalizeMoney(Number(row.price_charged)),
+    balance: normalizeMoney(Number(row.balance)),
+    dailySpent:
+      row.daily_spent == null ? undefined : normalizeMoney(Number(row.daily_spent)),
+    dailyLimit:
+      row.daily_limit == null ? undefined : normalizeMoney(Number(row.daily_limit)),
   };
 }
 
@@ -560,7 +564,8 @@ export async function refundChargedGeneration(
   const row = firstRpcRow(result);
   return {
     refunded: Boolean(row.refunded),
-    balance: row.balance === null ? undefined : Number(row.balance),
+    balance:
+      row.balance === null ? undefined : normalizeMoney(Number(row.balance)),
   };
 }
 

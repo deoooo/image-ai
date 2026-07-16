@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { adjustUserBalance, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
+import { addMoney, isValidMoney, normalizeMoney, subtractMoney } from "@/lib/money";
 
 function isValidAmount(amount: unknown): amount is number {
-  return typeof amount === "number" && Number.isFinite(amount) && amount > 0;
+  return isValidMoney(amount, { positive: true });
 }
 
 function isValidOperation(operation: unknown): operation is "credit" | "debit" {
@@ -21,7 +22,7 @@ export async function PATCH(
 
     if (!isValidAmount(amount)) {
       return NextResponse.json(
-        { error: "Amount must be greater than zero" },
+        { error: "Amount must be greater than zero with at most 3 decimal places" },
         { status: 400 }
       );
     }
@@ -33,7 +34,8 @@ export async function PATCH(
       );
     }
 
-    const user = await adjustUserBalance(id, amount, operation);
+    const normalizedAmount = normalizeMoney(amount);
+    const user = await adjustUserBalance(id, normalizedAmount, operation);
     await recordOperation({
       actorRole: "admin",
       actorUsername: session.username,
@@ -41,8 +43,11 @@ export async function PATCH(
       targetType: "user",
       targetId: user.id,
       targetName: user.username,
-      amount,
-      previousValue: operation === "credit" ? user.balance - amount : user.balance + amount,
+      amount: normalizedAmount,
+      previousValue:
+        operation === "credit"
+          ? subtractMoney(user.balance, normalizedAmount)
+          : addMoney(user.balance, normalizedAmount),
       newValue: user.balance,
     });
 

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireTeamAdmin } from "@/lib/api-auth";
 import { recordOperation, SupabaseDataError, updateTeamUserDailyLimit } from "@/lib/supabase-data";
+import { isValidMoney, normalizeMoney } from "@/lib/money";
 
 export async function PATCH(
   req: Request,
@@ -10,10 +11,14 @@ export async function PATCH(
     const session = requireTeamAdmin(req);
     const { id } = await params;
     const { dailyLimit } = await req.json();
-    if (typeof dailyLimit !== "number" || !Number.isFinite(dailyLimit) || dailyLimit < 0) {
-      return NextResponse.json({ error: "Daily limit must be non-negative" }, { status: 400 });
+    if (!isValidMoney(dailyLimit)) {
+      return NextResponse.json(
+        { error: "Daily limit must be non-negative with at most 3 decimal places" },
+        { status: 400 }
+      );
     }
-    const user = await updateTeamUserDailyLimit(session.teamId, id, dailyLimit);
+    const normalizedDailyLimit = normalizeMoney(dailyLimit);
+    const user = await updateTeamUserDailyLimit(session.teamId, id, normalizedDailyLimit);
     await recordOperation({
       actorRole: "team_admin",
       actorUsername: session.username,
@@ -23,7 +28,7 @@ export async function PATCH(
       targetType: "team_member",
       targetId: user.id,
       targetName: user.username,
-      newValue: dailyLimit,
+      newValue: normalizedDailyLimit,
     });
     return NextResponse.json({ user });
   } catch (error) {

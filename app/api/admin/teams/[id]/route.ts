@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { adjustTeamBalance, recordOperation, SupabaseDataError } from "@/lib/supabase-data";
+import { addMoney, isValidMoney, normalizeMoney, subtractMoney } from "@/lib/money";
 
 export async function PATCH(
   req: Request,
@@ -10,13 +11,17 @@ export async function PATCH(
     const session = requireAdmin(req);
     const { id } = await params;
     const { amount, operation } = await req.json();
-    if (typeof amount !== "number" || !Number.isFinite(amount) || amount <= 0) {
-      return NextResponse.json({ error: "Amount must be greater than zero" }, { status: 400 });
+    if (!isValidMoney(amount, { positive: true })) {
+      return NextResponse.json(
+        { error: "Amount must be greater than zero with at most 3 decimal places" },
+        { status: 400 }
+      );
     }
     if (operation !== "credit" && operation !== "debit") {
       return NextResponse.json({ error: "Operation must be credit or debit" }, { status: 400 });
     }
-    const team = await adjustTeamBalance(id, amount, operation);
+    const normalizedAmount = normalizeMoney(amount);
+    const team = await adjustTeamBalance(id, normalizedAmount, operation);
     await recordOperation({
       actorRole: "admin",
       actorUsername: session.username,
@@ -25,8 +30,11 @@ export async function PATCH(
       targetType: "team",
       targetId: id,
       targetName: team.name,
-      amount,
-      previousValue: operation === "credit" ? team.balance - amount : team.balance + amount,
+      amount: normalizedAmount,
+      previousValue:
+        operation === "credit"
+          ? subtractMoney(team.balance, normalizedAmount)
+          : addMoney(team.balance, normalizedAmount),
       newValue: team.balance,
     });
     return NextResponse.json({ team });

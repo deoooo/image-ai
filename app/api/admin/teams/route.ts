@@ -7,9 +7,10 @@ import {
   recordOperation,
   SupabaseDataError,
 } from "@/lib/supabase-data";
+import { isValidMoney, normalizeMoney } from "@/lib/money";
 
 function validNonNegative(value: unknown): value is number {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0;
+  return isValidMoney(value);
 }
 
 export async function GET(req: Request) {
@@ -46,12 +47,16 @@ export async function POST(req: Request) {
       );
     }
     if (!validNonNegative(balance)) {
-      return NextResponse.json({ error: "Balance must be non-negative" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Balance must be non-negative with at most 3 decimal places" },
+        { status: 400 }
+      );
     }
 
+    const normalizedBalance = normalizeMoney(balance);
     const result = await createTeamWithAdmin({
       name: normalizedName,
-      balance,
+      balance: normalizedBalance,
       adminUsername: normalizedUsername,
       adminPasswordHash: await hashPassword(adminPassword),
     });
@@ -63,7 +68,7 @@ export async function POST(req: Request) {
       targetType: "team",
       targetId: result.team.id,
       targetName: result.team.name,
-      amount: balance,
+      amount: normalizedBalance,
       newValue: result.team.balance,
     });
     return NextResponse.json(result, { status: 201 });

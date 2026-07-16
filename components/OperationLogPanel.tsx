@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { History, LoaderCircle, RefreshCw } from "lucide-react";
+import { normalizeMoney } from "@/lib/money";
 
 type OperationLog = {
   id: string;
@@ -28,11 +29,11 @@ const actionLabels: Record<string, string> = {
 };
 
 function describeChange(operation: OperationLog, numberFormat: Intl.NumberFormat) {
-  if (operation.amount != null) return numberFormat.format(operation.amount);
+  if (operation.amount != null) return numberFormat.format(normalizeMoney(operation.amount));
   if (operation.previousValue != null && operation.newValue != null) {
-    return `${numberFormat.format(operation.previousValue)} → ${numberFormat.format(operation.newValue)}`;
+    return `${numberFormat.format(normalizeMoney(operation.previousValue))} → ${numberFormat.format(normalizeMoney(operation.newValue))}`;
   }
-  if (operation.newValue != null) return numberFormat.format(operation.newValue);
+  if (operation.newValue != null) return numberFormat.format(normalizeMoney(operation.newValue));
   return "—";
 }
 

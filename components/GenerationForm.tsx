@@ -4,6 +4,7 @@ import React from "react";
 import { GenerationModel, AspectRatio, ImageSize } from "@/types";
 import { cn } from "@/lib/utils";
 import { Wand2 } from "lucide-react";
+import { formatMoney, hasEnoughMoney } from "@/lib/money";
 
 interface GenerationFormProps {
   prompt: string;
@@ -39,8 +40,8 @@ export function GenerationForm({
   dailyRemaining,
 }: GenerationFormProps) {
   const hasInsufficientBalance =
-    (balance !== undefined && balance < modelPrice) ||
-    (dailyRemaining !== undefined && dailyRemaining < modelPrice);
+    (balance !== undefined && !hasEnoughMoney(balance, modelPrice)) ||
+    (dailyRemaining !== undefined && !hasEnoughMoney(dailyRemaining, modelPrice));
   const isDisabled = isGenerating || !prompt.trim() || hasInsufficientBalance;
   const isGptImage = model === "gpt-image-2";
 
@@ -127,12 +128,12 @@ export function GenerationForm({
       </div>
 
       <div className="rounded-lg bg-gray-50 px-4 py-3 text-sm text-gray-700">
-        Selected model price: <span className="font-semibold">{modelPrice} RMB</span>
+        Selected model price: <span className="font-semibold">{formatMoney(modelPrice)} RMB</span>
         {balance !== undefined && (
-          <span className="ml-3 text-gray-500">Balance: {balance}</span>
+          <span className="ml-3 text-gray-500">Balance: {formatMoney(balance)}</span>
         )}
         {dailyRemaining !== undefined && (
-          <span className="ml-3 text-gray-500">Daily remaining: {dailyRemaining}</span>
+          <span className="ml-3 text-gray-500">Daily remaining: {formatMoney(dailyRemaining)}</span>
         )}
       </div>
 

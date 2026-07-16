@@ -3,9 +3,10 @@ import { ApiAuthError, requireAdmin } from "@/lib/api-auth";
 import { BUILT_IN_USER } from "@/lib/built-in-user";
 import { hashPassword } from "@/lib/password";
 import { SupabaseDataError, createUser, listUsers, recordOperation } from "@/lib/supabase-data";
+import { isValidMoney, normalizeMoney } from "@/lib/money";
 
 function isValidBalance(balance: unknown): balance is number {
-  return typeof balance === "number" && Number.isFinite(balance) && balance >= 0;
+  return isValidMoney(balance);
 }
 
 export async function GET(req: Request) {
@@ -61,15 +62,16 @@ export async function POST(req: Request) {
 
     if (!isValidBalance(balance)) {
       return NextResponse.json(
-        { error: "Balance must be a non-negative number" },
+        { error: "Balance must be non-negative with at most 3 decimal places" },
         { status: 400 }
       );
     }
 
+    const normalizedBalance = normalizeMoney(balance);
     const user = await createUser({
       username: normalizedUsername,
       passwordHash: await hashPassword(password),
-      balance,
+      balance: normalizedBalance,
     });
     await recordOperation({
       actorRole: "admin",
@@ -78,7 +80,7 @@ export async function POST(req: Request) {
       targetType: "user",
       targetId: user.id,
       targetName: user.username,
-      amount: balance,
+      amount: normalizedBalance,
       newValue: user.balance,
     });
 

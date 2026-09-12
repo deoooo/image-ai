@@ -1,5 +1,6 @@
 export type GenerationModel =
   | "gpt-image-2"
+  | "gpt-image-2.5"
   | "nano-banana-fast"
   | "nano-banana-pro";
 export type AspectRatio = "auto" | "1:1" | "16:9" | "9:16" | "4:3" | "3:4" | "3:2" | "2:3" | "5:4" | "4:5" | "21:9";

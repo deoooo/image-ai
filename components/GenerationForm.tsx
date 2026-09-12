@@ -43,10 +43,10 @@ export function GenerationForm({
     (balance !== undefined && !hasEnoughMoney(balance, modelPrice)) ||
     (dailyRemaining !== undefined && !hasEnoughMoney(dailyRemaining, modelPrice));
   const isDisabled = isGenerating || !prompt.trim() || hasInsufficientBalance;
-  const isGptImage = model === "gpt-image-2";
+  const isGptImage = model === "gpt-image-2" || model === "gpt-image-2.5";
 
   const handleModelChange = (nextModel: GenerationModel) => {
-    if (nextModel === "gpt-image-2") {
+    if (nextModel === "gpt-image-2" || nextModel === "gpt-image-2.5") {
       onImageSizeChange("1K");
       if (!["auto", "1:1", "3:2", "2:3"].includes(aspectRatio)) {
         onAspectRatioChange("auto");
@@ -68,6 +68,7 @@ export function GenerationForm({
           className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-900 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
         >
           <option value="gpt-image-2">GPT Image 2</option>
+          <option value="gpt-image-2.5">GPT Image 2.5</option>
           <option value="nano-banana-fast">Nano Banana Fast</option>
           <option value="nano-banana-pro">Nano Banana Pro</option>
         </select>

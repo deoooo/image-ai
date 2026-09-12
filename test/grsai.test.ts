@@ -58,6 +58,29 @@ describe("GrsaiClient", () => {
     });
   });
 
+  test("uses the GPT Image endpoint for GPT Image 2.5", async () => {
+    const client = new GrsaiClient();
+
+    await client.draw({
+      model: "gpt-image-2.5",
+      prompt: "paint a red fox",
+      aspectRatio: "2:3",
+      imageSize: "1K",
+    });
+
+    expect(httpMock.fetchWithProxy).toHaveBeenCalledWith(
+      "https://grsai.example/v1/draw/completions",
+      expect.any(Object)
+    );
+
+    const request = httpMock.fetchWithProxy.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(request.body as string)).toMatchObject({
+      model: "gpt-image-2.5",
+      aspectRatio: "1024x1536",
+    });
+    expect(JSON.parse(request.body as string)).not.toHaveProperty("imageSize");
+  });
+
   test("keeps Nano Banana on its existing endpoint", async () => {
     const client = new GrsaiClient();
 

@@ -40,7 +40,7 @@ export class GrsaiClient {
     );
 
     const model = params.model || "nano-banana-pro";
-    const isGptImage = model === "gpt-image-2";
+    const isGptImage = model === "gpt-image-2" || model === "gpt-image-2.5";
     const endpoint = isGptImage
       ? "/v1/draw/completions"
       : "/v1/draw/nano-banana";
